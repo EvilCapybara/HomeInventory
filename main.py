@@ -1,6 +1,7 @@
 import cli
 from homemanager import HomeManager
 
+
 def main():
     ''' Main function. '''
 

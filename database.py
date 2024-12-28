@@ -48,7 +48,9 @@ class MyPostgresConnection:
         self.cur.execute(query, values)
 
         if self.cur.rowcount == 0:
-            return values[0], values[2]
+            self.cur.execute(f"SELECT quantity FROM {tablename} WHERE name = '{values[0]}'")
+            old_quantity = self.cur.fetchone()[0]
+            return values[0], old_quantity
         else:
             self.connection.commit()
             return None
@@ -57,7 +59,7 @@ class MyPostgresConnection:
         ''' Updating cell's value in the main table. '''
 
         tablename = "AllHouseholdItems"
-        query = f'UPDATE {tablename} SET {dest_column} = %s WHERE {cond_column} = %s'
+        query = f"UPDATE {tablename} SET {dest_column} = {dest_value} WHERE {cond_column} = '{cond_value}'"
         self.cur.execute(query)
         self.connection.commit()
 

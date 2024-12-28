@@ -32,11 +32,11 @@ class HomeManager:
 
     def add_new_item(self, values: tuple):
         # returning name and quantity values
-        data_to_update = self.conn.add_new_item(values)  # io 1
+        data_to_update = self.conn.add_new_item(values)
 
         if data_to_update is not None:  # added already existing item
             # increasing quantity by 1
-            new_quantity = data_to_update[1] + 1
+            new_quantity = data_to_update[1] + values[2]
             self.conn.update_cell('quantity', new_quantity, 'name', data_to_update[0])
             print(f"Item with this id already exists. Increased the quantity of this item by 1.")
         else:
