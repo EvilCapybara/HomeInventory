@@ -19,7 +19,7 @@ class MyPostgresConnection:
         ''' Just showing main table containing all household items. '''
 
         tablename = "AllHouseholdItems"
-        query = f'SELECT * FROM {tablename}'
+        query = f'SELECT * FROM {tablename} ORDER BY id'
         self.cur.execute(query)
         for row in self.cur.fetchall():
             print(row)

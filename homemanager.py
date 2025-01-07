@@ -35,12 +35,12 @@ class HomeManager:
         data_to_update = self.conn.add_new_item(values)
 
         if data_to_update is not None:  # added already existing item
-            # increasing quantity by 1
+            # increasing quantity by the specified value
             new_quantity = data_to_update[1] + values[2]
             self.conn.update_cell('quantity', new_quantity, 'name', data_to_update[0])
-            print(f"Item with this id already exists. Increased the quantity of this item by 1.")
+            print(f"Item with this id already exists. Increased the quantity of this item by {values[2]}.")
         else:
-            print(f"New item was inserted successfully.")
+            print(f"New item {values[0]} was inserted successfully.")
 
     def welcome_view(self):
         self.conn.show_database()

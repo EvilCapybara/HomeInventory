@@ -6,7 +6,7 @@ def main():
     ''' Main function. '''
 
     home_manager = HomeManager()
-    cli.add()
+    cli.adding()
     home_manager.welcome_view()
 
 
