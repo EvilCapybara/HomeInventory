@@ -31,9 +31,9 @@ class MyPostgresConnection:
             CREATE TABLE IF NOT EXISTS AllHouseholdItems(
                 id SERIAL PRIMARY KEY,
                 category TEXT,
-                name TEXT UNIQUE,
+                name TEXT NOT NULL,
                 quantity SMALLINT,
-                storage_place TEXT
+                storageplace TEXT NOT NULL
             )
         '''
         self.cur.execute(query)
@@ -43,7 +43,7 @@ class MyPostgresConnection:
         ''' Adding new record to the main table. '''
 
         tablename = "AllHouseholdItems"
-        query = (f'INSERT INTO {tablename} (name, storage_place, quantity, category) VALUES (%s, %s, %s, %s) '
+        query = (f'INSERT INTO {tablename} (name, storageplace, quantity, category) VALUES (%s, %s, %s, %s) '
                  f'ON CONFLICT (name) DO NOTHING')
         self.cur.execute(query, values)
 
@@ -59,7 +59,7 @@ class MyPostgresConnection:
         ''' Updating cell's value in the main table. '''
 
         tablename = "AllHouseholdItems"
-        query = f"UPDATE {tablename} SET {dest_column} = {dest_value} WHERE {cond_column} = '{cond_value}'"
+        query = f"UPDATE {tablename} SET {dest_column} = '{dest_value}' WHERE {cond_column} = '{cond_value}'"
         self.cur.execute(query)
         self.connection.commit()
 

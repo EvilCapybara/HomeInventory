@@ -32,15 +32,19 @@ class HomeManager:
 
     def add_new_item(self, values: tuple):
         # returning name and quantity values
-        data_to_update = self.conn.add_new_item(values)
+        data_to_add = self.conn.add_new_item(values)
 
-        if data_to_update is not None:  # added already existing item
+        if data_to_add is not None:  # added already existing item
             # increasing quantity by the specified value
-            new_quantity = data_to_update[1] + values[2]
-            self.conn.update_cell('quantity', new_quantity, 'name', data_to_update[0])
+            new_quantity = data_to_add[1] + values[2]
+            self.conn.update_cell('quantity', new_quantity, 'name', data_to_add[0])  # TODO сделать метод update для менеджера, а не conn
             print(f"Item with this id already exists. Increased the quantity of this item by {values[2]}.")
         else:
             print(f"New item {values[0]} was inserted successfully.")
+
+    def update_table(self, destcol, destval, condcol, condval):
+        self.conn.update_cell(destcol, destval, condcol, condval)
+        print(f'Successfully changed {destcol} field ')
 
     def welcome_view(self):
         self.conn.show_database()
