@@ -2,6 +2,9 @@ import psycopg2 as pg_driver
 from typing import Union
 
 
+TABLENAME = "AllHouseholdItems"
+
+
 class MyPostgresConnection:
     def __init__(self, db_name: str, user: str, password: str, host: str, port: int):
         self.db_name = db_name
@@ -18,8 +21,7 @@ class MyPostgresConnection:
     def show_database(self):
         ''' Just showing main table containing all household items. '''
 
-        tablename = "AllHouseholdItems"
-        query = f'SELECT * FROM {tablename} ORDER BY id'
+        query = f'SELECT * FROM {TABLENAME} ORDER BY id'
         self.cur.execute(query)
         for row in self.cur.fetchall():
             print(row)
@@ -33,7 +35,7 @@ class MyPostgresConnection:
                 category TEXT,
                 name TEXT NOT NULL,
                 quantity SMALLINT,
-                storageplace TEXT NOT NULL
+                storage_place TEXT NOT NULL
             )
         '''
         self.cur.execute(query)
@@ -42,13 +44,12 @@ class MyPostgresConnection:
     def add_new_item(self, values: tuple):
         ''' Adding new record to the main table. '''
 
-        tablename = "AllHouseholdItems"
-        query = (f'INSERT INTO {tablename} (name, storageplace, quantity, category) VALUES (%s, %s, %s, %s) '
+        query = (f'INSERT INTO {TABLENAME} (name, storageplace, quantity, category) VALUES (%s, %s, %s, %s) '
                  f'ON CONFLICT (name) DO NOTHING')
         self.cur.execute(query, values)
 
         if self.cur.rowcount == 0:
-            self.cur.execute(f"SELECT quantity FROM {tablename} WHERE name = '{values[0]}'")
+            self.cur.execute(f"SELECT quantity FROM {TABLENAME} WHERE name = '{values[0]}'")
             old_quantity = self.cur.fetchone()[0]
             return values[0], old_quantity
         else:
@@ -58,10 +59,57 @@ class MyPostgresConnection:
     def update_cell(self, dest_column: str, dest_value: Union[str, int], cond_column: str, cond_value: Union[str, int]):
         ''' Updating cell's value in the main table. '''
 
-        tablename = "AllHouseholdItems"
-        query = f"UPDATE {tablename} SET {dest_column} = '{dest_value}' WHERE {cond_column} = '{cond_value}'"
+        query = f"UPDATE {TABLENAME} SET {dest_column} = '{dest_value}' WHERE {cond_column} = '{cond_value}'"
         self.cur.execute(query)
         self.connection.commit()
+
+    def delete(self, name: str):
+        ''' Deleting all info about specified item from the main table. '''
+
+        self.cur.execute(f"DELETE FROM {TABLENAME} WHERE name = '{name}'")
+        self.connection.commit()
+
+    def remove(self, name: str, quantity: int):
+        ''' Decreasing amount of specified items. '''
+
+        self.cur.execute(f"SELECT quantity FROM {TABLENAME} WHERE name = '{name}'")
+        cur_quantity = self.cur.fetchone()[0]
+        return cur_quantity
+
+    def add_new_col(self, name: str, type: str, constraints: str):
+        ''' Adding new field into the main table '''
+
+        self.cur.execute(f"ALTER TABLE {TABLENAME} ADD COLUMN {name} {type} {constraints} DEFAULT 'unknown'")
+        self.connection.commit()
+
+    def delete_col(self, name):
+        ''' Deleting the field from the main table '''
+
+        self.cur.execute(f'ALTER TABLE {TABLENAME} DROP COLUMN {name}')
+        self.connection.commit()
+
+    def rename_col(self, old_name, new_name):
+        ''' Changing the field's name in the main table '''
+
+        self.cur.execute(f'ALTER TABLE {TABLENAME} RENAME COLUMN {old_name} TO {new_name}')
+        self.connection.commit()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def find(self, item_name: str):
         ''' Finding the desired record in the main table. '''
