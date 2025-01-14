@@ -1,4 +1,6 @@
 from database import MyPostgresConnection
+import config
+from elastic import es
 
 
 type_mapping = {'str': 'text',
@@ -8,6 +10,7 @@ type_mapping = {'str': 'text',
                 'datetime.date': 'date',
                 'none': 'null'
                 }
+
 
 def singleton(cls):
     instances = {}
@@ -23,20 +26,16 @@ def singleton(cls):
 @singleton
 class HomeManager:
     def __init__(self):
-        # configuration data
-        DATABASE_NAME = 'HomeInventory'
-        DATABASE_USER = 'postgres'
-        DATABASE_PASSWORD = '1'
-        DATABASE_HOST = 'localhost'
-        DATABASE_PORT = 5432
-
         # connecting to the database, creating its main table and filling it
         ''' Manages all household items. '''
-        self.conn = MyPostgresConnection(db_name=DATABASE_NAME, user=DATABASE_USER,
-                                         password=DATABASE_PASSWORD,
-                                         host=DATABASE_HOST, port=DATABASE_PORT)
+        # self.conn = MyPostgresConnection(db_name=config.DATABASE_NAME, user=config.DATABASE_USER,
+        #                                  password=config.DATABASE_PASSWORD,
+        #                                  host=config.DATABASE_HOST, port=config.DATABASE_PORT)
+        self.conn = MyPostgresConnection()
         self.conn.connect()
-        self.conn.create_main_table()
+        # self.conn.create_main_table()
+
+        # self.elasticsearch = es
 
     def add_new_item(self, values: tuple):  # FIXME change (values) to smth more describing
         # returning name and quantity values
@@ -94,6 +93,15 @@ class HomeManager:
         self.conn.rename_col(old_name, new_name)
 
         print(f'Successfully renamed {old_name} field to {new_name}')
+
+    def find(self, colname, value):
+        colname = colname.replace(' ', '_')
+        target_rows = self.conn.find(colname, value)
+        if target_rows:
+            for row in target_rows:
+                print(row)
+        else:
+            print(f'Item with {colname} {value} not found')
 
     def welcome_view(self):
         self.conn.show_database()

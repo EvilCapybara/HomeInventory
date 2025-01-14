@@ -73,9 +73,17 @@ def rename_col(oldname, newname):
 
 
 # @click.group()
-# def searching_commands():
+# def searching():
 #     """A custom CLI tool for searching for desired records in the table."""
 #     pass
+
+
+@click.command()
+@click.argument('colname', type=str)
+@click.argument('value', type=str)
+def find(colname, value):
+    home_manager = HomeManager()
+    home_manager.find(colname, value)
 
 
 

@@ -1,22 +1,37 @@
 import psycopg2 as pg_driver
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from typing import Union
-
+from models import Base
+import config
 
 TABLENAME = "AllHouseholdItems"
 
 
 class MyPostgresConnection:
-    def __init__(self, db_name: str, user: str, password: str, host: str, port: int):
-        self.db_name = db_name
-        self.user = user
-        self.password = password
-        self.host = host
-        self.port = port
+    def __init__(self):
+        # self.db_name = db_name
+        # self.user = user
+        # self.password = password
+        # self.host = host
+        # self.port = port  # маленькая буква - атрибут класса как просто переменная
+        self.engine = None
+        self.session = None  # большая буква - атрибут класса как экземпляр другого класса
 
     def connect(self):
-        self.connection = pg_driver.connect(dbname=self.db_name, user=self.user, password=self.password, host=self.host,
-                                            port=self.port)
-        self.cur = self.connection.cursor()
+        # аналог self.connection = pg_driver.connect()
+        self.engine = create_engine(config.SQLALCHEMY_DATABASE_URI, echo=True)
+
+        # connecting AllHouseholdItems to postgres server
+        Base.metadata.create_all(self.engine)
+
+        SessionFactory = sessionmaker(bind=self.engine)  # мал. буква - создание не объекта, а фабрики объектов
+        # аналог self.cur = self.connection.cursor()
+        self.session = SessionFactory()
+
+        # self.connection = pg_driver.connect(dbname=self.db_name, user=self.user, password=self.password,
+#                                             host=self.host, port=self.port)
+#         self.cur = self.connection.cursor()
 
     def show_database(self):
         ''' Just showing main table containing all household items. '''
@@ -29,17 +44,17 @@ class MyPostgresConnection:
     def create_main_table(self):
         ''' Main table containing all household items. '''
 
-        query = '''
-            CREATE TABLE IF NOT EXISTS AllHouseholdItems(
-                id SERIAL PRIMARY KEY,
-                category TEXT,
-                name TEXT NOT NULL,
-                quantity SMALLINT,
-                storage_place TEXT NOT NULL
-            )
-        '''
-        self.cur.execute(query)
-        self.connection.commit()
+        # query = '''
+        #     CREATE TABLE IF NOT EXISTS AllHouseholdItems(
+        #         id SERIAL PRIMARY KEY,
+        #         category TEXT,
+        #         name TEXT NOT NULL,
+        #         quantity SMALLINT,
+        #         storage_place TEXT NOT NULL
+        #     )
+        # '''
+        # self.cur.execute(query)
+        # self.connection.commit()
 
     def add_new_item(self, values: tuple):
         ''' Adding new record to the main table. '''
@@ -73,8 +88,8 @@ class MyPostgresConnection:
         ''' Decreasing amount of specified items. '''
 
         self.cur.execute(f"SELECT quantity FROM {TABLENAME} WHERE name = '{name}'")
-        cur_quantity = self.cur.fetchone()[0]
-        return cur_quantity
+
+        return self.cur.fetchone()[0]
 
     def add_new_col(self, name: str, type: str, constraints: str):
         ''' Adding new field into the main table '''
@@ -82,38 +97,41 @@ class MyPostgresConnection:
         self.cur.execute(f"ALTER TABLE {TABLENAME} ADD COLUMN {name} {type} {constraints} DEFAULT 'unknown'")
         self.connection.commit()
 
-    def delete_col(self, name):
+    def delete_col(self, name: str):
         ''' Deleting the field from the main table '''
 
         self.cur.execute(f'ALTER TABLE {TABLENAME} DROP COLUMN {name}')
         self.connection.commit()
 
-    def rename_col(self, old_name, new_name):
+    def rename_col(self, old_name: str, new_name: str):
         ''' Changing the field's name in the main table '''
 
         self.cur.execute(f'ALTER TABLE {TABLENAME} RENAME COLUMN {old_name} TO {new_name}')
         self.connection.commit()
 
+    def find(self, colname: str, value: Union[str, int]):
+        ''' Searching for the desired item in the main table '''
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    def find(self, item_name: str):
-        ''' Finding the desired record in the main table. '''
-
-        tablename = "AllHouseholdItems"
-        query = f'SELECT * FROM {tablename} WHERE name = {item_name}'
+        query = f"SELECT * FROM {TABLENAME} WHERE {colname} = '{value}'"
         self.cur.execute(query)
+        rows = self.cur.fetchall()
+
+        return rows if rows else False
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

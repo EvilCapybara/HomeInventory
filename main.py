@@ -6,8 +6,8 @@ def main():
     ''' Main function. '''
 
     home_manager = HomeManager()
-    cli.remove()
-    home_manager.welcome_view()
+    # cli.find()
+    # home_manager.welcome_view()
 
 
 if __name__ == '__main__':
