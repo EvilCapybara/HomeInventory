@@ -12,11 +12,14 @@ from homemanager import HomeManager
 @click.command()
 @click.argument('name', type=str)
 @click.argument('place', type=str)
+@click.option('--brand', type=str, help="Item's brand", default=None)
+@click.option('--model', type=str, help="Item's model", default=None)
+@click.option('--category', type=str, help="Item's category", default=None)
 @click.option('--quantity', type=int, help='Quantity of items', default=1)
-@click.option('--category', type=str, help="Item's category", default='Unknown')
-def add(name, place, quantity, category):
+@click.option('--belonging', type=str, help="Item's owner", default=None)
+def add(name, brand, model, category, quantity, place, belonging):
     home_manager = HomeManager()
-    home_manager.add_new_item(values=(name, place, quantity, category))
+    home_manager.add_new_item(name, brand, model, category, quantity, place, belonging)
 
 
 @click.command()

@@ -1,26 +1,24 @@
 import psycopg2 as pg_driver
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import IntegrityError
 from typing import Union
-from models import Base
+from models import Base, AllHouseholdItems
 import config
+import logging
 
 TABLENAME = "AllHouseholdItems"
 
 
 class MyPostgresConnection:
     def __init__(self):
-        # self.db_name = db_name
-        # self.user = user
-        # self.password = password
-        # self.host = host
-        # self.port = port  # маленькая буква - атрибут класса как просто переменная
-        self.engine = None
+        self.engine = None  # маленькая буква - атрибут класса как просто переменная
         self.session = None  # большая буква - атрибут класса как экземпляр другого класса
 
     def connect(self):
         # аналог self.connection = pg_driver.connect()
-        self.engine = create_engine(config.SQLALCHEMY_DATABASE_URI, echo=True)
+        self.engine = create_engine(config.SQLALCHEMY_DATABASE_URI)
+                                    # echo=True)
 
         # connecting AllHouseholdItems to postgres server
         Base.metadata.create_all(self.engine)
@@ -28,10 +26,8 @@ class MyPostgresConnection:
         SessionFactory = sessionmaker(bind=self.engine)  # мал. буква - создание не объекта, а фабрики объектов
         # аналог self.cur = self.connection.cursor()
         self.session = SessionFactory()
-
-        # self.connection = pg_driver.connect(dbname=self.db_name, user=self.user, password=self.password,
-#                                             host=self.host, port=self.port)
-#         self.cur = self.connection.cursor()
+        # my_table = Base.metadata.tables['AllHouseholdItems']
+        # print(my_table.__repr__())
 
     def show_database(self):
         ''' Just showing main table containing all household items. '''
@@ -41,42 +37,33 @@ class MyPostgresConnection:
         for row in self.cur.fetchall():
             print(row)
 
-    def create_main_table(self):
-        ''' Main table containing all household items. '''
-
-        # query = '''
-        #     CREATE TABLE IF NOT EXISTS AllHouseholdItems(
-        #         id SERIAL PRIMARY KEY,
-        #         category TEXT,
-        #         name TEXT NOT NULL,
-        #         quantity SMALLINT,
-        #         storage_place TEXT NOT NULL
-        #     )
-        # '''
-        # self.cur.execute(query)
-        # self.connection.commit()
-
-    def add_new_item(self, values: tuple):
+    def add_new_item(self, name, brand, model, category, quantity, place, belonging):  # TODO вопрос добавление существующего это расчет или ошибка
         ''' Adding new record to the main table. '''
 
-        query = (f'INSERT INTO {TABLENAME} (name, storageplace, quantity, category) VALUES (%s, %s, %s, %s) '
-                 f'ON CONFLICT (name) DO NOTHING')
-        self.cur.execute(query, values)
+        new_item = AllHouseholdItems(name=name, brand=brand, model=model, category=category, quantity=quantity,
+                                     storage_place=place, belong_to=belonging)
+        self.session.add(new_item)
 
-        if self.cur.rowcount == 0:
-            self.cur.execute(f"SELECT quantity FROM {TABLENAME} WHERE name = '{values[0]}'")
-            old_quantity = self.cur.fetchone()[0]
-            return values[0], old_quantity
-        else:
-            self.connection.commit()
-            return None
+        try:
+            self.session.commit()
+            # self.session.close()
+            return True, None
+        except IntegrityError as e:
+            # logging.error(f"IntegrityError caught: {e}")
+            self.session.rollback()
+
+            query = select(AllHouseholdItems.quantity).where(AllHouseholdItems.name == name)
+            old_quantity = self.session.execute(query).scalar()
+            return False, old_quantity
 
     def update_cell(self, dest_column: str, dest_value: Union[str, int], cond_column: str, cond_value: Union[str, int]):
         ''' Updating cell's value in the main table. '''
 
-        query = f"UPDATE {TABLENAME} SET {dest_column} = '{dest_value}' WHERE {cond_column} = '{cond_value}'"
-        self.cur.execute(query)
-        self.connection.commit()
+        # cond_column = getattr(AllHouseholdItems, cond_column)
+        filtered_query = self.session.query(AllHouseholdItems).filter(getattr(AllHouseholdItems, cond_column) == cond_value)
+        # dest_column = getattr(AllHouseholdItems, dest_column)
+        filtered_query.update({getattr(AllHouseholdItems, dest_column): dest_value})
+        self.session.commit()
 
     def delete(self, name: str):
         ''' Deleting all info about specified item from the main table. '''

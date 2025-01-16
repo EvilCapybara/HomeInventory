@@ -1,3 +1,5 @@
+import logging
+
 import cli
 from homemanager import HomeManager
 
@@ -6,7 +8,7 @@ def main():
     ''' Main function. '''
 
     home_manager = HomeManager()
-    # cli.find()
+    cli.add()
     # home_manager.welcome_view()
 
 

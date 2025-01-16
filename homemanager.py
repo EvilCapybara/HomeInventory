@@ -1,6 +1,7 @@
-from database import MyPostgresConnection
 import config
+from database import MyPostgresConnection
 from elastic import es
+from typing import Optional
 
 
 type_mapping = {'str': 'text',
@@ -33,21 +34,28 @@ class HomeManager:
         #                                  host=config.DATABASE_HOST, port=config.DATABASE_PORT)
         self.conn = MyPostgresConnection()
         self.conn.connect()
-        # self.conn.create_main_table()
 
         # self.elasticsearch = es
 
-    def add_new_item(self, values: tuple):  # FIXME change (values) to smth more describing
-        # returning name and quantity values
-        data_to_add = self.conn.add_new_item(values)
+    def add_new_item(self,
+                     name: str,
+                     brand: Optional[str],
+                     model: Optional[str],
+                     category: Optional[str],
+                     quantity: int,
+                     place: str,
+                     belonging: Optional[str]):
 
-        if data_to_add is not None:  # added already existing item
-            # increasing quantity by the specified value
-            new_quantity = data_to_add[1] + values[2]
-            self.conn.update_cell('quantity', new_quantity, 'name', data_to_add[0])
-            print(f"Item with this id already exists. Increased the quantity of this item by {values[2]}.")
+        # returning name and quantity values
+        result = self.conn.add_new_item(name, brand, model, category, quantity, place, belonging)
+
+        if result[0] is True:
+            print(f'Item {name} added successfully.')
         else:
-            print(f"New item {values[0]} was inserted successfully.")
+            # increasing quantity by the specified value
+            new_quantity = result[1] + quantity
+            self.conn.update_cell('quantity', new_quantity, 'name', name)
+            print(f"Item with this id already exists. Increased the quantity of this item by {result[1]}.")
 
     def update_table(self, destcol, destval, condcol, condval):
         self.conn.update_cell(destcol, destval, condcol, condval)
