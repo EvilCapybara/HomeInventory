@@ -1,5 +1,4 @@
 import click
-from typing import Optional
 from homemanager import HomeManager
 
 
@@ -49,11 +48,11 @@ def remove(name, quantity):
 
 @click.command()
 @click.argument('name', type=str)
-@click.argument('type', type=str)
-@click.option('--constraints', type=Optional[str])
-def add_new_col(name, type, constraints):
+@click.argument('coltype', type=str)
+@click.option('--constraints', type=str)
+def add_new_col(name, coltype, constraints):
     home_manager = HomeManager()
-    home_manager.add_new_col(name, type, constraints)
+    home_manager.add_new_col(name, coltype, constraints)
 
 
 @click.command()

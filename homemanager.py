@@ -58,9 +58,11 @@ class HomeManager:
             print(f"Item with this id already exists. Increased the quantity of this item by {result[1]}.")
 
     def update_table(self, destcol, destval, condcol, condval):
-        self.conn.update_cell(destcol, destval, condcol, condval)
-
-        print(f'Successfully changed {destcol} field')
+        successfully = self.conn.update_cell(destcol, destval, condcol, condval)
+        if successfully:
+            print(f'Successfully changed {destcol} field')
+        else:
+            print(f'No column with name {condcol} or {destcol} found')  # TODO возможно добавить свою функцию nosuchcolumnfound, используя dict и col_id
 
     def delete(self, name, was_last=False):
         self.conn.delete(name)
@@ -78,24 +80,26 @@ class HomeManager:
         if new_quantity <= 0:
             self.delete(name, was_last=True)
         else:
-            self.conn.update_cell('quantity', new_quantity, 'name', name)
+            self.update_table('quantity', new_quantity, 'name', name)
 
-    def add_new_col(self, name, type, constraints):
+    def add_new_col(self, name, coltype, constraints):
         name = name.replace(' ', '_')
-        type = type_mapping[type]
+        coltype = type_mapping[coltype]
         if constraints == 'unique':
             raise ValueError("You cannot use UNIQUE constraint for new added column due to default value reasons.")
         elif constraints is None:
             constraints = ''
-        self.conn.add_new_col(name, type, constraints)
+        self.conn.add_new_col(name, coltype, constraints)
 
         print(f'Successfully added new {name} field')
 
     def delete_col(self, name):
         name = name.replace(' ', '_')
-        self.conn.delete_col(name)
-
-        print(f'Successfully deleted {name} field')
+        successfully = self.conn.delete_col(name)
+        if successfully:
+            print(f'Successfully deleted {name} field')
+        else:
+            print(f'No column with name {name} found')
 
     def rename_col(self, old_name, new_name):
         self.conn.rename_col(old_name, new_name)
