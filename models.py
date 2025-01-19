@@ -1,5 +1,6 @@
 from sqlalchemy import String, SmallInteger, Text
 from sqlalchemy.orm import Mapped, mapped_column, declarative_base
+from datetime import datetime, timezone
 from typing import Optional
 
 
@@ -17,6 +18,7 @@ class AllHouseholdItems(Base):
     quantity: Mapped[int] = mapped_column(SmallInteger)
     storage_place: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     belong_to: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    timestamp: Mapped[datetime] = mapped_column(index=True, default=lambda: datetime.now(timezone.utc))
 
     # def __repr__(self):
     #     return f'<Main table {self.__tablename__} containing all household items>'

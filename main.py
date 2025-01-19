@@ -8,7 +8,7 @@ def main():
     ''' Main function. '''
 
     home_manager = HomeManager()
-    cli.remove()
+    cli.add_new_col()
     # home_manager.welcome_view()
 
 
