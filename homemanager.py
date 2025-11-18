@@ -2,6 +2,7 @@ import config
 from database import MyPostgresConnection
 from elastic import es
 from typing import Optional
+from models import SearchableMixin
 
 
 type_mapping = {'str': 'text',
@@ -36,6 +37,8 @@ class HomeManager:
         self.conn.connect()
 
         # self.elasticsearch = es
+        result, total = SearchableMixin.search("sony", connection=self.conn)
+        SearchableMixin.reindex(connection=self.conn)
 
     def add_new_item(self,
                      name: str,
@@ -64,8 +67,8 @@ class HomeManager:
         else:
             print(f'No column with name {condcol} or {destcol} found')  # TODO возможно добавить свою функцию nosuchcolumnfound, используя dict и col_id
 
-    def delete(self, name, was_last=False):
-        self.conn.delete(name)
+    def delete(self, name, was_last=False):  # TODO сообщение если колонка с таким именем не найдена
+        result = self.conn.delete(name)
 
         if was_last:
             print(f'Deleted {name} from the table. '

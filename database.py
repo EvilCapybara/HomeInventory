@@ -1,14 +1,16 @@
+''' Управление основными CRUD-операциями (create-read-update-delete) '''
+# В ПОСЛЕДНЕЙ ГЛАВЕ ХАБРОВСКОГО УЧЕБННИКА ПОКАЗАНО КАК ДОБАВИТЬ БАЗОВЫЕ ОПЦИИ ДЛЯ API (РЕГИСТРАЦИЯ НОВОГО ЮЗЕРА, ВЫВОД В ФОРМАТЕ СЛОВАРЯ)
+
 import psycopg2 as pg_driver
 from sqlalchemy import create_engine, select, delete, text, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError, NoSuchColumnError
 from typing import Union
-from models import Base, AllHouseholdItems
+from models import Base, AllHouseholdItems, Task, listening
 import config
-import logging
+import elastic
 
 TABLENAME = AllHouseholdItems.__tablename__
-a = TABLENAME
 
 
 class MyPostgresConnection:
@@ -29,22 +31,33 @@ class MyPostgresConnection:
         # аналог self.cur = self.connection.cursor()
         self.session = SessionFactory()
         self.inspector = inspect(self.engine)
-        # my_table = Base.metadata.tables['AllHouseholdItems']
-        # print(my_table.__repr__())
+        item = self.session.query(AllHouseholdItems).get(7)
+        listening(self.session)
 
     def show_database(self):
         ''' Just showing main table containing all household items. '''
 
-        query = f'SELECT * FROM {TABLENAME} ORDER BY id'
-        self.cur.execute(query)
-        for row in self.cur.fetchall():
-            print(row)
+        items = self.session.query(AllHouseholdItems).order_by(AllHouseholdItems.id).all()
+
+        if not items:
+            print("No items found in the database.")
+            return
+        for item in items:
+            print(item)
+
+    def export_database(self):
+        if Task.get_specific_task_in_progress(name='export_inventory_table'):
+            print('An export task is currently in progress')
+        else:
+            Task.launch_task(name='export_inventory_table', description='Exporting inventory table')
+            self.session.commit()
 
     def add_new_item(self, name, brand, model, category, quantity, place, belonging):  # TODO вопрос добавление существующего это расчет или ошибка
         ''' Adding new record to the main table. '''
 
         new_item = AllHouseholdItems(name=name, brand=brand, model=model, category=category, quantity=quantity,
                                      storage_place=place, belong_to=belonging)
+        print(repr(new_item))
         self.session.add(new_item)
 
         try:
@@ -66,7 +79,7 @@ class MyPostgresConnection:
             filtered_query.update({getattr(AllHouseholdItems, dest_column): dest_value})
             self.session.commit()
             return True
-        except AttributeError as e:
+        except AttributeError:
             self.session.rollback()
             return False
 

@@ -13,3 +13,4 @@ SQLALCHEMY_DATABASE_URI = os.getenv('SQLALCHEMY_DATABASE_URI',
                                                                                                                         # разграничение тестовой и продакшен дб
 
 ELASTICSEARCH_URL = os.getenv('ELASTICSEARCH_URL', default=None)
+REDIS_URL = os.getenv('REDIS_URL', default='redis://')

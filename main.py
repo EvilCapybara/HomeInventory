@@ -1,3 +1,5 @@
+''' Точка входа в программу '''
+
 import logging
 
 import cli
@@ -8,7 +10,7 @@ def main():
     ''' Main function. '''
 
     home_manager = HomeManager()
-    cli.add_new_col()
+    # cli.delete()
     # home_manager.welcome_view()
 
 
