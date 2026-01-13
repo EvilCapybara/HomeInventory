@@ -11,6 +11,8 @@ DATABASE_PORT = os.getenv('DATABASE_PORT')
 SQLALCHEMY_DATABASE_URI = os.getenv('SQLALCHEMY_DATABASE_URI',
                                     default=f'postgresql://{DATABASE_USER}:{DATABASE_PASSWORD}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}')  # подставь сюда любую другую дб
                                                                                                                         # разграничение тестовой и продакшен дб
+API_TOKEN = os.getenv('TELEGRAM_TOKEN')
+
 
 ELASTICSEARCH_URL = os.getenv('ELASTICSEARCH_URL', default=None)
 REDIS_URL = os.getenv('REDIS_URL', default='redis://')

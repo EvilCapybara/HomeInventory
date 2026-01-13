@@ -1,0 +1,188 @@
+import config
+import telebot
+from gui import Keyboard
+# from homemanager import HomeManager
+
+item_data = dict()
+
+
+class Bot(telebot.TeleBot):  # TODO добавить status чтобы сразу отправлять есть юзер в базе или нет
+    def __init__(self, token):
+        super().__init__(token)
+
+        self.user_states = dict()
+
+    def register_handlers(self):
+        # @self.callback_query_handler(func=lambda callback: callback.data == "skip")  # callback - объект CallbackQuery
+        # def skip_step(callback):
+        #     user = callback.from_user
+        #
+        #     if user.telegram_id not in self.user_states:
+        #         self.answer_callback_query(callback_query_id=callback.id)
+        #         return  # пользователь не в режиме добавления
+        #
+        #     state: dict = self.user_states[user.telegram_id]
+        #     step: str = state["step"]
+        #     data: dict = state["data"]
+        #
+        #     # помечаем текущий шаг как пропущенный
+        #     data[step] = None
+        #
+        #     # имитируем сообщение пользователя,
+        #     # чтобы пройти тот же путь, что и обычный ввод
+        #     # делаем создание класса fakemessage на лету, () без наследования, {} без методов и полей, () instance
+        #     fake_message = type("FakeMessage", (), {})()
+        #     fake_message.from_user = user
+        #     fake_message.chat = callback.message.chat
+        #     fake_message.text = ""  # текст не нужен, мы уже записали None
+        #
+        #     # вызываем основной обработчик шагов
+        #     self.handle_add_steps(message=fake_message)
+        #
+        #     # обязательно отвечаем Telegram
+        #     self.answer_callback_query(callback_query_id=callback.id)
+
+        @self.message_handler(commands=['start'])  # хэндлер команды старт
+        def start(message):
+            user = message.from_user
+            from homemanager import HomeManager
+            text = HomeManager().handle_start(user)
+            self.reply_to(message, text, parse_mode="Markdown")
+
+        @self.message_handler(commands=['show'])
+        def view(message):
+            user = message.from_user
+            from homemanager import HomeManager
+            text = HomeManager().handle_view(user)
+            self.reply_to(message, text)
+
+        @self.message_handler(commands=['add_new_item'])
+        def add(message):
+            user = message.from_user
+
+            self.user_states[user.telegram_id] = {
+                "step": "name",  # текущий шаг
+                "data": {}  # уже введённые данные
+            }
+            self.handle_add_steps(message=message)
+
+            from homemanager import HomeManager
+            text = HomeManager().add_new_item(user, item_data=item_data)
+            self.reply_to(message, text)
+
+        @self.message_handler(func=lambda message: True)
+        def add_steps(message):
+            self.handle_add_steps(message)
+
+    def handle_add_steps(self, message):
+        user = message.from_user
+
+        if user.telegram_id not in self.user_states:
+            return  # пользователь не в режиме добавления
+
+        state: dict = self.user_states[user.telegram_id]
+        step: str = state["step"]
+        data: dict = state["data"]
+
+        # --- словарь переходов между шагами ---
+        next_step = {
+            "name": "brand",
+            "brand": "model",
+            "model": "category",
+            "category": "quantity",
+            "quantity": "storage_place",
+            "storage_place": "belong_to",
+            "belong_to": None
+        }
+
+        # --- сохраняем текст пользователя в data ---
+        if step == "name":
+            data["name"] = message.text
+        elif step == "brand":
+            data["brand"] = message.text
+        elif step == "model":
+            data["model"] = message.text
+        elif step == "category":
+            data["category"] = message.text
+        elif step == "quantity":
+            if not message.text.isdigit():
+                self.reply_to(message, "Пожалуйста, введите число.")
+                return
+            data["quantity"] = int(message.text)
+        elif step == "storage_place":
+            data["storage_place"] = message.text
+        elif step == "belong_to":
+            data["belong_to"] = message.text
+
+        # --- определяем следующий шаг ---
+        next_step = next_step.get(step)
+        state["step"] = next_step
+
+        # --- если шагов больше нет, сохраняем в БД ---
+        if next_step is None:
+            from homemanager import HomeManager
+            text = HomeManager().add_new_item(user=user, item_data=data)
+
+            # очищаем состояние пользователя
+            del self.user_states[user.id]
+
+            # отправляем финальное сообщение
+            self.reply_to(message, text)
+            return
+
+        # --- словарь подсказок для следующих шагов ---
+        prompts = {
+            "name": "Введите название предмета:",
+            "brand": "Введите бренд предмета (или 'Пропустить'):",
+            "model": "Введите модель (или 'Пропустить'):",
+            "category": "Введите категорию (или 'Пропустить'):",
+            "quantity": "Введите количество:",
+            "storage_place": "Введите место хранения (или 'Пропустить'):",
+            "belong_to": "Введите хозяина вещи (или 'Пропустить'):"
+        }
+
+        # --- отправляем следующий вопрос ---
+        prompt = prompts.get(next_step)
+        if next_step in ["brand", "model", "category", "storage_place", "belong_to"]:
+            # добавляем кнопку "Пропустить" для опциональных шагов
+            self.reply_to(message=message, text=prompt, reply_markup=Keyboard().skip_keyboard())
+        else:
+            # обычный текстовый вопрос
+            self.reply_to(message=message, text=prompt)
+
+    # pgflpg,pf;g,df;fb
+
+    # def messaging_handler(self):
+    #     @self.message_handler(func=lambda message: True)
+    #     def add_steps(message):
+    #         self.handle_add_steps(message)
+
+    # def callback_button_handler(self):
+    #     @self.callback_query_handler(func=lambda callback: callback.data == "skip")  # callback - объект CallbackQuery
+    #     def skip_step(callback):
+    #         user = callback.from_user
+    #
+    #         if user.telegram_id not in self.user_states:
+    #             self.answer_callback_query(callback_query_id=callback.id)
+    #             return  # пользователь не в режиме добавления
+    #
+    #         state: dict = self.user_states[user.telegram_id]
+    #         step: str = state["step"]
+    #         data: dict = state["data"]
+    #
+    #         # помечаем текущий шаг как пропущенный
+    #         data[step] = None
+    #
+    #         # имитируем сообщение пользователя,
+    #         # чтобы пройти тот же путь, что и обычный ввод
+    #         # делаем создание класса fakemessage на лету, () без наследования, {} без методов и полей, () instance
+    #         fake_message = type("FakeMessage", (), {})()
+    #         fake_message.from_user = user
+    #         fake_message.chat = callback.message.chat
+    #         fake_message.text = ""  # текст не нужен, мы уже записали None
+    #
+    #         # вызываем основной обработчик шагов
+    #         self.handle_add_steps(message=fake_message)
+    #
+    #         # обязательно отвечаем Telegram
+    #         self.answer_callback_query(callback_query_id=callback.id)

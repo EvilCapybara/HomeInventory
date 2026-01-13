@@ -1,65 +1,71 @@
 import redis
 import rq
 from rq import exceptions
-from sqlalchemy import select, case, event, String, SmallInteger, Text
-from sqlalchemy.orm import Mapped, mapped_column, declarative_base
+from sqlalchemy import select, case, event, String, SmallInteger, Text, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, declarative_base, relationship
 from tasks import redis_conn, task_queue, export_inventory_table
 from datetime import datetime, timezone
-from elastic import add_to_index, remove_from_index, query_index
+# from elastic import add_to_index, remove_from_index, query_index
 from typing import Optional
 
 
 Base = declarative_base()
 
 
-class SearchableMixin(object):
-    @classmethod
-    def search(cls, expression, connection):
-        ids, total = query_index('AllHouseholdItems', expression)  # FIXME заменить хардкод на cls.__tablename__
-        if total == 0:
-            return [], 0
-        when = []
-        for i in range(len(ids)):
-            when.append((ids[i], i))
-        query = select(cls).where(cls.id.in_(ids)).order_by(case(*when, value=cls.id))
-        return connection.session.scalars(query), total
-
-    @classmethod
-    def before_commit(cls, session):
-        session._changes = {
-            'add': list(session.new),
-            'update': list(session.dirty),
-            'delete': list(session.deleted)
-        }
-
-    @classmethod
-    def after_commit(cls, session):
-        for obj in session._changes['add']:
-            if isinstance(obj, SearchableMixin):
-                add_to_index(cls.__tablename__, obj)  # FIXME заменить на obj.__tablename__
-        for obj in session._changes['update']:
-            if isinstance(obj, SearchableMixin):
-                add_to_index(cls.__tablename__, obj)
-        for obj in session._changes['delete']:
-            if isinstance(obj, SearchableMixin):
-                remove_from_index(cls.__tablename__, obj)
-        session._changes = None
-
-    @classmethod
-    def reindex(cls, connection):
-        for obj in connection.session.scalars(select(cls)):
-            add_to_index(cls.__tablename__, obj)
+# class SearchableMixin(object):
+#     @classmethod
+#     def search(cls, expression, connection):
+#         ids, total = query_index('AllHouseholdItems', expression)  # FIXME заменить хардкод на cls.__tablename__
+#         if total == 0:
+#             return [], 0
+#         when = []
+#         for i in range(len(ids)):
+#             when.append((ids[i], i))
+#         query = select(cls).where(cls.id.in_(ids)).order_by(case(*when, value=cls.id))
+#         return connection.session.scalars(query), total
+#
+#     @classmethod
+#     def before_commit(cls, session):
+#         session._changes = {
+#             'add': list(session.new),
+#             'update': list(session.dirty),
+#             'delete': list(session.deleted)
+#         }
+#
+#     @classmethod
+#     def after_commit(cls, session):
+#         for obj in session._changes['add']:
+#             if isinstance(obj, SearchableMixin):
+#                 add_to_index(cls.__tablename__, obj)  # FIXME заменить на obj.__tablename__
+#         for obj in session._changes['update']:
+#             if isinstance(obj, SearchableMixin):
+#                 add_to_index(cls.__tablename__, obj)
+#         for obj in session._changes['delete']:
+#             if isinstance(obj, SearchableMixin):
+#                 remove_from_index(cls.__tablename__, obj)
+#         session._changes = None
+#
+#     @classmethod
+#     def reindex(cls, connection):
+#         for obj in connection.session.scalars(select(cls)):
+#             add_to_index(cls.__tablename__, obj)
 
 
 class Users(Base):
     __tablename__ = 'Users'
 
     user_id: Mapped[int] = mapped_column(primary_key=True)
+    telegram_id: Mapped[int] = mapped_column(unique=True, nullable=False)
     username: Mapped[Optional[str]] = mapped_column(String(64), unique=True, nullable=True)
     first_name: Mapped[str] = mapped_column(String(64), unique=False, nullable=False)
 
+    items: Mapped[list["AllHouseholdItems"]] = relationship(
+        back_populates="user",  # <-- ссылается на поле owner_id в AllHouseholdItems
+        cascade="all, delete-orphan"
+    )
 
-class AllHouseholdItems(SearchableMixin, Base):
+
+class AllHouseholdItems(Base):  # потом вернуть наследование от searchable mixin
     __tablename__ = 'AllHouseholdItems'
     __searchable__ = ['name', 'brand', 'category', 'storage_place']  # тип подчеркивания указывает на обработку внешними библиотеками/инструментами
 
@@ -68,10 +74,13 @@ class AllHouseholdItems(SearchableMixin, Base):
     brand: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     model: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     category: Mapped[str] = mapped_column(String(64), nullable=True)
-    quantity: Mapped[int] = mapped_column(SmallInteger)
+    quantity: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     storage_place: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     belong_to: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     timestamp: Mapped[datetime] = mapped_column(index=True, default=lambda: datetime.now(timezone.utc))
+    owner_id: Mapped[int] = mapped_column(ForeignKey('Users.user_id'), nullable=False)
+
+    user: Mapped["Users"] = relationship("Users", back_populates="items")  # <-- ссылается на поле user_id в Users
 
     # def __repr__(self):
     #     return f'<Main table {self.__tablename__} containing all household items>'
@@ -115,7 +124,7 @@ class Task(Base):  # warranty_expiry_notifications_and_other_emails
         # return session.scalar(query)
 
 
-def listening(session):
-    event.listen(session, 'before_commit', SearchableMixin.before_commit)
-    event.listen(session, 'after_commit', SearchableMixin.after_commit)
+# def listening(session):
+#     event.listen(session, 'before_commit', SearchableMixin.before_commit)
+#     event.listen(session, 'after_commit', SearchableMixin.after_commit)
 

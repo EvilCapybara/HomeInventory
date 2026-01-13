@@ -1,8 +1,10 @@
+from api import Bot
 import config
+import telebot
 from database import MyPostgresConnection
-from elastic import es
+# from elastic import es
 from typing import Optional
-from models import SearchableMixin
+# from models import SearchableMixin
 
 
 type_mapping = {'str': 'text',
@@ -37,28 +39,63 @@ class HomeManager:
         self.conn.connect()
 
         # self.elasticsearch = es
-        result, total = SearchableMixin.search("sony", connection=self.conn)
-        SearchableMixin.reindex(connection=self.conn)
+        # result, total = SearchableMixin.search("sony", connection=self.conn)
+        # SearchableMixin.reindex(connection=self.conn)
 
-    def add_new_item(self,
-                     name: str,
-                     brand: Optional[str],
-                     model: Optional[str],
-                     category: Optional[str],
-                     quantity: int,
-                     place: str,
-                     belonging: Optional[str]):
+    # def add_new_user(self, username, first_name):
+    #
+    #     result = self.conn.add_new_user(username, first_name)
+    #
+    #     if result is True:
+    #         print(f'User {username} added successfully.')
+    #     else:
+    #         print(f"User with this username already exists.")
+    #         return False
+
+    def handle_start(self, user: telebot.types.User):
+        if self.conn.add_new_user(user.id, user.username, user.first_name):
+            text = f"""Привет, *{user.first_name}*!\n"
+                   Я бот-помощник. Помогу вести подробный учет твоего домашнего пространства.\n
+                   Чтобы начать или продолжить наполнение своего виртуального домика, отправь команду /add new item.\n
+                   Чтобы просмотреть все добавленные предметы - /show_my_household
+                   Для отмены – /cancel.\n
+                   Эффективной организации!
+                   """
+            return text
+        text = 'Вы уже зарегистрированы!'
+        return text
+
+    def handle_view(self, user: telebot.types.User):
+        # self.conn.show_database()
+        status, items = self.conn.show_database(belonging_to=user.id)
+        if status == 'no_user':
+            text = 'Вы ещё не зарегистрированы'
+        elif status == 'no_items':
+            text = 'У вас пока нет сохранённых предметов.'
+        else:
+            return
+        if items:
+            text_lines = []
+            for item in items:
+                line = f"- {item.name} | {item.quantity or '-'} | хранение: {item.storage_place}"
+                text_lines.append(line)
+            text = "\n".join(text_lines)
+        return text
+
+    def add_new_item(self, user, item_data: dict):
 
         # returning name and quantity values
-        result = self.conn.add_new_item(name, brand, model, category, quantity, place, belonging)
+        result, how_many_already_existed = self.conn.add_new_item(item_data)
 
-        if result[0] is True:
-            print(f'Item {name} added successfully.')
+        if result is True:
+            text = f"Item {item_data['name']} added successfully."
         else:
             # increasing quantity by the specified value
-            new_quantity = result[1] + quantity
-            self.conn.update_cell('quantity', new_quantity, 'name', name)
-            print(f"Item with this id already exists. Increased the quantity of this item by {result[1]}.")
+            new_quantity = how_many_already_existed + item_data['quantity']
+            self.conn.update_cell('quantity', new_quantity, 'name', item_data['name'])
+            text = f"Item with this id already exists. Increased the quantity of this item by {item_data['quantity']}."
+
+        return text
 
     def update_table(self, destcol, destval, condcol, condval):
         successfully = self.conn.update_cell(destcol, destval, condcol, condval)
@@ -118,5 +155,5 @@ class HomeManager:
         else:
             print(f'Item with {colname} {value} not found')
 
-    def welcome_view(self):
-        self.conn.show_database()
+
+

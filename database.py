@@ -6,7 +6,9 @@ from sqlalchemy import create_engine, select, delete, text, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError, NoSuchColumnError
 from typing import Union
-from models import Base, AllHouseholdItems, Task, listening
+from models import (Base, AllHouseholdItems, Users, Task,
+                    # listening
+                    )
 import config
 import elastic
 
@@ -32,18 +34,36 @@ class MyPostgresConnection:
         self.session = SessionFactory()
         self.inspector = inspect(self.engine)
         item = self.session.query(AllHouseholdItems).get(7)
-        listening(self.session)
+        # listening(self.session)
 
-    def show_database(self):
+    def show_database(self, belonging_to: int):  #TODO добавить проверку на existing юзера, чтоб каждый раз не прописывать первый блок
         ''' Just showing main table containing all household items. '''
 
-        items = self.session.query(AllHouseholdItems).order_by(AllHouseholdItems.id).all()
+        user = self.session.query(Users).filter_by(telegram_id=belonging_to).first()
+        if not user:
+            return 'no_user', None
+
+        items = user.items
 
         if not items:
-            print("No items found in the database.")
-            return
-        for item in items:
-            print(item)
+            return 'no_items', None
+
+        return 'success', items
+
+    def add_new_user(self, id, username, first_name):
+        ''' Adding new record to the main table. '''
+
+        new_user = Users(telegram_id=id, username=username, first_name=first_name)
+        # print(repr(new_user))
+        self.session.add(new_user)
+
+        try:
+            self.session.commit()
+            # self.session.close()
+            return True
+        except IntegrityError as e:
+            self.session.rollback()
+            return False
 
     def export_database(self):
         if Task.get_specific_task_in_progress(name='export_inventory_table'):
@@ -52,25 +72,30 @@ class MyPostgresConnection:
             Task.launch_task(name='export_inventory_table', description='Exporting inventory table')
             self.session.commit()
 
-    def add_new_item(self, name, brand, model, category, quantity, place, belonging):  # TODO вопрос добавление существующего это расчет или ошибка
+    def add_new_item(self, item_data: dict):  # TODO вопрос добавление существующего это расчет или ошибка
         ''' Adding new record to the main table. '''
 
-        new_item = AllHouseholdItems(name=name, brand=brand, model=model, category=category, quantity=quantity,
-                                     storage_place=place, belong_to=belonging)
-        print(repr(new_item))
+        new_item = AllHouseholdItems(name=item_data['name'], brand=item_data['brand'], model=item_data['model'],
+                                     category=item_data['category'], quantity=item_data['quantity'],
+                                     storage_place=item_data['storage_place'], belong_to=item_data['belong_to'])
+        # print(repr(new_item))
         self.session.add(new_item)
 
         try:
             self.session.commit()
+            result = True
+            how_many_already_existed = 0
             # self.session.close()
-            return True, None
-        except IntegrityError as e:
+            return result, how_many_already_existed
+        except IntegrityError as e:  # TODO добавить обратную связь для юзера если данные не подходят под условия табл
             # logging.error(f"IntegrityError caught: {e}")
             self.session.rollback()
 
-            query = select(AllHouseholdItems.quantity).where(AllHouseholdItems.name == name)
+            query = select(AllHouseholdItems.quantity).where(AllHouseholdItems.name == item_data['name'])
             old_quantity = self.session.execute(query).scalar()
-            return False, old_quantity
+            result = False
+            how_many_already_existed = old_quantity
+            return result, how_many_already_existed
 
     def update_cell(self, dest_column: str, dest_value: Union[str, int], cond_column: str, cond_value: Union[str, int]):
         ''' Updating cell's value in the main table. '''
