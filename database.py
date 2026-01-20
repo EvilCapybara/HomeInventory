@@ -10,6 +10,7 @@ from models import (Base, AllHouseholdItems, Users, Task,
                     # listening
                     )
 import config
+import telebot.types as telebot
 import elastic
 
 TABLENAME = AllHouseholdItems.__tablename__
@@ -33,7 +34,6 @@ class MyPostgresConnection:
         # аналог self.cur = self.connection.cursor()
         self.session = SessionFactory()
         self.inspector = inspect(self.engine)
-        item = self.session.query(AllHouseholdItems).get(7)
         # listening(self.session)
 
     def show_database(self, belonging_to: int):  #TODO добавить проверку на existing юзера, чтоб каждый раз не прописывать первый блок
@@ -72,12 +72,15 @@ class MyPostgresConnection:
             Task.launch_task(name='export_inventory_table', description='Exporting inventory table')
             self.session.commit()
 
-    def add_new_item(self, item_data: dict):  # TODO вопрос добавление существующего это расчет или ошибка
+    def add_new_item(self, user: telebot.User, item_data: dict):  # TODO вопрос добавление существующего это расчет или ошибка
         ''' Adding new record to the main table. '''
+
+        db_user = (self.session.query(Users).filter(Users.telegram_id == user.id).one())
 
         new_item = AllHouseholdItems(name=item_data['name'], brand=item_data['brand'], model=item_data['model'],
                                      category=item_data['category'], quantity=item_data['quantity'],
-                                     storage_place=item_data['storage_place'], belong_to=item_data['belong_to'])
+                                     storage_place=item_data['storage_place'], belong_to=item_data['belong_to'],
+                                     owner=db_user)
         # print(repr(new_item))
         self.session.add(new_item)
 
@@ -86,16 +89,19 @@ class MyPostgresConnection:
             result = True
             how_many_already_existed = 0
             # self.session.close()
-            return result, how_many_already_existed
         except IntegrityError as e:  # TODO добавить обратную связь для юзера если данные не подходят под условия табл
+            print(e)
             # logging.error(f"IntegrityError caught: {e}")
             self.session.rollback()
 
-            query = select(AllHouseholdItems.quantity).where(AllHouseholdItems.name == item_data['name'])
-            old_quantity = self.session.execute(query).scalar()
+        query = select(AllHouseholdItems.quantity).where(AllHouseholdItems.name == item_data['name'])
+        old_quantity = self.session.execute(query).scalar()
+        if old_quantity is None:
+            old_quantity = 0
             result = False
             how_many_already_existed = old_quantity
-            return result, how_many_already_existed
+
+        return result, how_many_already_existed
 
     def update_cell(self, dest_column: str, dest_value: Union[str, int], cond_column: str, cond_value: Union[str, int]):
         ''' Updating cell's value in the main table. '''

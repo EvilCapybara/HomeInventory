@@ -60,7 +60,7 @@ class Users(Base):
     first_name: Mapped[str] = mapped_column(String(64), unique=False, nullable=False)
 
     items: Mapped[list["AllHouseholdItems"]] = relationship(
-        back_populates="user",  # <-- ссылается на поле owner_id в AllHouseholdItems
+        back_populates="owner",  # <-- ссылается на поле owner_id в AllHouseholdItems
         cascade="all, delete-orphan"
     )
 
@@ -80,7 +80,7 @@ class AllHouseholdItems(Base):  # потом вернуть наследован
     timestamp: Mapped[datetime] = mapped_column(index=True, default=lambda: datetime.now(timezone.utc))
     owner_id: Mapped[int] = mapped_column(ForeignKey('Users.user_id'), nullable=False)
 
-    user: Mapped["Users"] = relationship("Users", back_populates="items")  # <-- ссылается на поле user_id в Users
+    owner: Mapped["Users"] = relationship("Users", back_populates="items")  # <-- ссылается на поле user_id в Users
 
     # def __repr__(self):
     #     return f'<Main table {self.__tablename__} containing all household items>'

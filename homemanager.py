@@ -85,7 +85,7 @@ class HomeManager:
     def add_new_item(self, user, item_data: dict):
 
         # returning name and quantity values
-        result, how_many_already_existed = self.conn.add_new_item(item_data)
+        result, how_many_already_existed = self.conn.add_new_item(user, item_data)
 
         if result is True:
             text = f"Item {item_data['name']} added successfully."
