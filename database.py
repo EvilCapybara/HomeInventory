@@ -36,6 +36,10 @@ class MyPostgresConnection:
         self.inspector = inspect(self.engine)
         # listening(self.session)
 
+    def get_current_db_user(self, tg_user):
+        """Возвращает текущий объект Users из базы по telegram_id"""
+        return self.session.query(Users).filter(Users.telegram_id == tg_user.id).one_or_none()
+
     def show_database(self, belonging_to: int):  #TODO добавить проверку на existing юзера, чтоб каждый раз не прописывать первый блок
         ''' Just showing main table containing all household items. '''
 
@@ -117,9 +121,19 @@ class MyPostgresConnection:
     def delete(self, name: str):
         ''' Deleting all info about specified item from the main table. '''
 
-        query = delete(AllHouseholdItems).where(AllHouseholdItems.name == name)
-        self.session.execute(query)
-        self.session.commit()
+        item = self.session.query(AllHouseholdItems).filter(AllHouseholdItems.name == name).one_or_none()
+
+        if not item:
+            return False, None
+        else:
+            if item.quantity == 1:
+                self.session.delete(item)
+                self.session.commit()
+                return True, True
+            else:
+                item.quantity -= 1
+                self.session.commit()
+                return True, False
 
     def remove(self, name: str, quantity: int):
         ''' Decreasing amount of specified items. '''

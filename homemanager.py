@@ -67,7 +67,7 @@ class HomeManager:
 
     def handle_view(self, user: telebot.types.User):
         # self.conn.show_database()
-        status, items = self.conn.show_database(belonging_to=user.id)
+        status, items = self.conn.show_database(belonging_to=user.id)  # убрать прокидывание юзера через вызовы, пусть каждый раз вычисляется в database
         if status == 'no_user':
             text = 'Вы ещё не зарегистрированы'
         elif status == 'no_items':
@@ -104,14 +104,18 @@ class HomeManager:
         else:
             print(f'No column with name {condcol} or {destcol} found')  # TODO возможно добавить свою функцию nosuchcolumnfound, используя dict и col_id
 
-    def delete(self, name, was_last=False):  # TODO сообщение если колонка с таким именем не найдена
-        result = self.conn.delete(name)
+    def handle_delete(self, name):
+        exists, was_last = self.conn.delete(name)
+
+        if not exists:
+            text = f"Item {name} doesn't exist."
 
         if was_last:
-            print(f'Deleted {name} from the table. '
-                  f'Please note that this was the last one. Maybe you will have to buy a new one?')
+            text = f"""Deleted {name} from the table.\n
+                  Please note that this was the last one. Maybe you will have to buy a new one?'
+                  """
         else:
-            print(f'Successfully deleted {name} from the table')
+            text = f'Successfully deleted {name} from the table'
 
     def remove(self, name, quantity):
         cur_quantity = self.conn.remove(name, quantity)

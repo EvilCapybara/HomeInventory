@@ -13,7 +13,6 @@ bot.register_handlers()
 
 def main():
     ''' Main function. '''
-
     home_manager = HomeManager()
     # cli.delete()
     # home_manager.welcome_view()
