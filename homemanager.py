@@ -2,8 +2,9 @@ from api import Bot
 import config
 import telebot
 from database import MyPostgresConnection
+from sqlalchemy.exc import IntegrityError, StatementError
 # from elastic import es
-from typing import Optional
+from typing import Optional, Union
 # from models import SearchableMixin
 
 
@@ -97,34 +98,46 @@ class HomeManager:
 
         return text
 
-    def update_table(self, destcol, destval, condcol, condval):
-        successfully = self.conn.update_cell(destcol, destval, condcol, condval)
-        if successfully:
-            print(f'Successfully changed {destcol} field')
-        else:
-            print(f'No column with name {condcol} or {destcol} found')  # TODO возможно добавить свою функцию nosuchcolumnfound, используя dict и col_id
+    def update_table(self, destcol: str, destval: Union[str, int], condcol: str, condval: Union[str, int]):
+        success, exception = self.conn.update_cell(destcol, destval, condcol, condval)
+        if success:
+            text = f'Successfully changed {destcol} field'
+        elif isinstance(exception, IntegrityError):
+            text = f'No column with name {condcol} or {destcol} found'  # TODO возможно добавить свою функцию nosuchcolumnfound, используя dict и col_id
+        elif isinstance(exception, StatementError):
+            text = f'Wrong type of value entered for {destcol}'
 
-    def handle_delete(self, name):
-        exists, was_last = self.conn.delete(name)
+        return text
+
+    def delete(self, item_data: dict):
+        exists = self.conn.delete(item_data["name"])
 
         if not exists:
-            text = f"Item {name} doesn't exist."
-
-        if was_last:
-            text = f"""Deleted {name} from the table.\n
-                  Please note that this was the last one. Maybe you will have to buy a new one?'
-                  """
+            text = f"Item {item_data['name']} doesn't exist."
         else:
-            text = f'Successfully deleted {name} from the table'
+            text = f"Successfully deleted {item_data['name']} from the table"
 
-    def remove(self, name, quantity):
-        cur_quantity = self.conn.remove(name, quantity)
-        new_quantity = cur_quantity - quantity
+        return text
+
+    def edit_quantity(self, item_data: dict, context: str):
+        cur_quantity = self.conn.remove(item_data["name"], item_data["quantity"])
+
+        if context == 'remove':
+            new_quantity = cur_quantity - item_data["quantity"]
+        elif context == 'add_more':
+            new_quantity = cur_quantity + item_data["quantity"]
 
         if new_quantity <= 0:
-            self.delete(name, was_last=True)
-        else:
-            self.update_table('quantity', new_quantity, 'name', name)
+            if new_quantity == 0:
+                text = f"""Deleted {item_data['name']} from the table.\n
+                           Please note that this was the last one. Maybe you will have to buy a new one?
+                        """
+            self.handle_delete(item_data)
+
+        elif new_quantity > 0:
+            text = self.update_table('quantity', new_quantity, 'name', item_data["name"])
+
+        return text
 
     def add_new_col(self, name, coltype, constraints):
         name = name.replace(' ', '_')

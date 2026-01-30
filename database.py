@@ -4,7 +4,7 @@
 import psycopg2 as pg_driver
 from sqlalchemy import create_engine, select, delete, text, inspect
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import IntegrityError, NoSuchColumnError
+from sqlalchemy.exc import IntegrityError, NoSuchColumnError, StatementError
 from typing import Union
 from models import (Base, AllHouseholdItems, Users, Task,
                     # listening
@@ -113,29 +113,24 @@ class MyPostgresConnection:
             filtered_query = self.session.query(AllHouseholdItems).filter(getattr(AllHouseholdItems, cond_column) == cond_value)
             filtered_query.update({getattr(AllHouseholdItems, dest_column): dest_value})
             self.session.commit()
-            return True
-        except AttributeError:
+            return True, None
+        except (IntegrityError, StatementError) as e:
             self.session.rollback()
-            return False
+            return False, e
 
     def delete(self, name: str):
         ''' Deleting all info about specified item from the main table. '''
 
         item = self.session.query(AllHouseholdItems).filter(AllHouseholdItems.name == name).one_or_none()
 
-        if not item:
-            return False, None
+        if not item:  # TODO сделать это отдельной функцией проверки экзиста предмета
+            return False
         else:
-            if item.quantity == 1:
-                self.session.delete(item)
-                self.session.commit()
-                return True, True
-            else:
-                item.quantity -= 1
-                self.session.commit()
-                return True, False
+            self.session.delete(item)
+            self.session.commit()
+            return True
 
-    def remove(self, name: str, quantity: int):
+    def remove(self, name: str, quantity: int):  # TODO сделать эту функцию не как delete а просто фильтр из таблицы - ничего особенно делитного она не делает
         ''' Decreasing amount of specified items. '''
 
         quantity = self.session.execute(select(AllHouseholdItems.quantity).where(AllHouseholdItems.name == name))
