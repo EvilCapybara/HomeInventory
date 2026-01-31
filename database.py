@@ -4,8 +4,8 @@
 import psycopg2 as pg_driver
 from sqlalchemy import create_engine, select, delete, text, inspect
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import IntegrityError, NoSuchColumnError, StatementError
-from typing import Union
+from sqlalchemy.exc import IntegrityError, NoSuchColumnError, StatementError, ProgrammingError
+from typing import Union, Optional
 from models import (Base, AllHouseholdItems, Users, Task,
                     # listening
                     )
@@ -118,7 +118,7 @@ class MyPostgresConnection:
             self.session.rollback()
             return False, e
 
-    def delete(self, name: str):
+    def delete(self, name: str) -> bool:
         ''' Deleting all info about specified item from the main table. '''
 
         item = self.session.query(AllHouseholdItems).filter(AllHouseholdItems.name == name).one_or_none()
@@ -130,18 +130,26 @@ class MyPostgresConnection:
             self.session.commit()
             return True
 
-    def remove(self, name: str, quantity: int):  # TODO сделать эту функцию не как delete а просто фильтр из таблицы - ничего особенно делитного она не делает
+    def remove(self, name: str) -> Optional[int]:  # TODO сделать эту функцию не как delete а просто фильтр из таблицы - ничего особенно делитного она не делает
         ''' Decreasing amount of specified items. '''
 
         quantity = self.session.execute(select(AllHouseholdItems.quantity).where(AllHouseholdItems.name == name))
 
         return quantity.scalar()
 
-    def add_new_col(self, name: str, coltype: str, constraints: str):
+    def add_new_col(self, name: str, coltype: str, constraints: str) -> bool:
         ''' Adding new field into the main table '''
-
-        self.session.execute(text(f'ALTER TABLE "{TABLENAME}" ADD COLUMN {name} {coltype} {constraints} DEFAULT NULL'))  # TODO потом заменить на alembic
-        self.session.commit()
+        try:
+            self.session.execute(text(f'ALTER TABLE "{TABLENAME}" ADD COLUMN {name} {coltype} {constraints} DEFAULT NULL'))  # TODO потом заменить на alembic
+            self.session.commit()
+            return True
+        except ProgrammingError as e:
+            # вытаскиваем оригинальный объект ошибки драйвера psycopg2.errors.DuplicateColumn, а из него код ошибки postgres
+            if getattr(e.orig, 'pgcode', None) == '42701':
+                self.session.rollback()
+                return False
+            else:
+                raise
 
     def delete_col(self, name: str):  # TODO потом заменить на alembic
         ''' Deleting the field from the main table '''

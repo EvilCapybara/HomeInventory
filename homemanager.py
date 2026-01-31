@@ -109,7 +109,7 @@ class HomeManager:
 
         return text
 
-    def delete(self, item_data: dict):
+    def delete(self, item_data: dict) -> str:
         exists = self.conn.delete(item_data["name"])
 
         if not exists:
@@ -119,7 +119,7 @@ class HomeManager:
 
         return text
 
-    def edit_quantity(self, item_data: dict, context: str):
+    def edit_quantity(self, item_data: dict, context: str) -> str:
         cur_quantity = self.conn.remove(item_data["name"], item_data["quantity"])
 
         if context == 'remove':
@@ -139,16 +139,26 @@ class HomeManager:
 
         return text
 
-    def add_new_col(self, name, coltype, constraints):
-        name = name.replace(' ', '_')
-        coltype = type_mapping[coltype]
-        if constraints == 'unique':
-            raise ValueError("You cannot use UNIQUE constraint for new added column due to default value reasons.")
-        elif constraints is None:
-            constraints = ''
-        self.conn.add_new_col(name, coltype, constraints)
+    def add_newcol(self, item_data: dict) -> str:
+        name: str = item_data["name"]
+        coltype: str = item_data["type"]
+        constraints: Optional[str] = item_data["constraints"]
 
-        print(f'Successfully added new {name} field')
+        name = '_'.join(name.strip().lower().split())
+
+        coltype = type_mapping[coltype]
+
+        # if constraints == 'unique':
+        #     raise ValueError("You cannot use UNIQUE constraint for new added column due to default value reasons.")
+        if constraints == '-' or constraints is None:
+            constraints = ''
+
+        if self.conn.add_new_col(name, coltype, constraints):
+            text = f'Successfully added new {name} field'
+        else:
+            text = f'Field with name {name} already exists!'
+
+        return text
 
     def delete_col(self, name):
         name = name.replace(' ', '_')
