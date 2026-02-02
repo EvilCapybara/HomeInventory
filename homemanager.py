@@ -160,18 +160,40 @@ class HomeManager:
 
         return text
 
-    def delete_col(self, name):
-        name = name.replace(' ', '_')
-        successfully = self.conn.delete_col(name)
-        if successfully:
-            print(f'Successfully deleted {name} field')
-        else:
-            print(f'No column with name {name} found')
+    def delete_col(self, item_data: dict) -> str:
+        name: str = item_data["name"]
+        name = '_'.join(name.strip().lower().split())
 
-    def rename_col(self, old_name, new_name):
-        self.conn.rename_col(old_name, new_name)
+        success, error_code = self.conn.delete_col(name)
 
-        print(f'Successfully renamed {old_name} field to {new_name}')
+        if success:
+            text = f'Successfully deleted {name} field'
+        elif error_code == '42703':  # undefined column
+            text = f'No column with name {name} found'
+        elif error_code == '23503':  # foreign key violation
+            text = f'Колонку "{name}" нельзя удалить — есть зависимые FK'
+
+        return text
+
+    def rename_col(self, item_data: dict) -> str:
+        old_name: str = item_data["old_name"]
+        new_name: str = item_data["new_name"]
+
+        old_name = '_'.join(old_name.strip().lower().split())
+        new_name = '_'.join(new_name.strip().lower().split())
+
+        success, error_code = self.conn.rename_col(old_name, new_name)
+
+        if success:
+            text = f'Successfully renamed {old_name} field to {new_name}'
+        elif error_code == '42703':  # undefined column
+            text = f'No column with name {old_name} found'
+        elif error_code == '42701':  # column already exists
+            text = f'Column with name {new_name} already exists'
+        elif error_code == '2BP01' or error_code == 'FOREIGN KEY':  # foreign key constraint
+            text = f'Эту колонку переименовывать нельзя'
+
+        return text
 
     def find(self, colname, value):
         colname = colname.replace(' ', '_')

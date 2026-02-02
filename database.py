@@ -2,6 +2,7 @@
 # В ПОСЛЕДНЕЙ ГЛАВЕ ХАБРОВСКОГО УЧЕБННИКА ПОКАЗАНО КАК ДОБАВИТЬ БАЗОВЫЕ ОПЦИИ ДЛЯ API (РЕГИСТРАЦИЯ НОВОГО ЮЗЕРА, ВЫВОД В ФОРМАТЕ СЛОВАРЯ)
 
 import psycopg2 as pg_driver
+import sqlalchemy
 from sqlalchemy import create_engine, select, delete, text, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError, NoSuchColumnError, StatementError, ProgrammingError
@@ -39,6 +40,20 @@ class MyPostgresConnection:
     def get_current_db_user(self, tg_user):
         """Возвращает текущий объект Users из базы по telegram_id"""
         return self.session.query(Users).filter(Users.telegram_id == tg_user.id).one_or_none()
+
+    def can_edit_col(self, col_name: str) -> tuple[bool, str | None]:
+
+        pk_columns = self.inspector.get_pk_constraint(TABLENAME)['constrained_columns']
+        if col_name in pk_columns:
+            return False, "PRIMARY KEY"
+
+        # --- Проверка FK ---
+        fks = self.inspector.get_foreign_keys(TABLENAME)
+        for fk in fks:
+            if col_name in fk['constrained_columns']:
+                return False, "FOREIGN KEY"
+
+        return True, None
 
     def show_database(self, belonging_to: int):  #TODO добавить проверку на existing юзера, чтоб каждый раз не прописывать первый блок
         ''' Just showing main table containing all household items. '''
@@ -151,22 +166,37 @@ class MyPostgresConnection:
             else:
                 raise
 
-    def delete_col(self, name: str):  # TODO потом заменить на alembic
+    def delete_col(self, name: str) -> tuple[bool, str | None]:  # TODO потом заменить на alembic
         ''' Deleting the field from the main table '''
 
         try:
-            self.session.execute(text(f'ALTER TABLE "{TABLENAME}" DROP COLUMN {name}'))
-            self.session.commit()
-            return True
-        except NoSuchColumnError as e:
+            result, reason = self.can_edit_col(col_name=name)
+            if not result:
+                return result, reason
+            else:
+                self.session.execute(text(f'ALTER TABLE "{TABLENAME}" DROP COLUMN {name}'))
+                self.session.commit()
+                return True, None
+        except ProgrammingError as e:
+            error_code = getattr(e.orig, 'pgcode', None)
             self.session.rollback()
-            return False
+            return False, error_code
 
-    def rename_col(self, old_name: str, new_name: str):  # TODO потом заменить на alembic
+    def rename_col(self, old_name: str, new_name: str) -> tuple[bool, str | None]:  # TODO потом заменить на alembic
         ''' Changing the field's name in the main table '''
 
-        self.session.execute(text(f'ALTER TABLE "{TABLENAME}" RENAME COLUMN {old_name} TO {new_name}'))
-        self.session.commit()
+        try:
+            result, reason = self.can_edit_col(col_name=old_name)
+            if not result:
+                return result, reason
+            else:
+                self.session.execute(text(f'ALTER TABLE "{TABLENAME}" RENAME COLUMN {old_name} TO {new_name}'))
+                self.session.commit()
+                return True, None
+        except ProgrammingError as e:
+            error_code = getattr(e.orig, 'pgcode', None)
+            self.session.rollback()
+            return False, error_code
 
     def find(self, colname: str, value: Union[str, int]):
         ''' Searching for the desired item in the main table '''
