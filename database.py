@@ -4,6 +4,7 @@
 import psycopg2 as pg_driver
 import sqlalchemy
 from sqlalchemy import create_engine, select, delete, text, inspect
+from sqlalchemy.engine import Row
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError, NoSuchColumnError, StatementError, ProgrammingError
 from typing import Union, Optional
@@ -154,6 +155,7 @@ class MyPostgresConnection:
 
     def add_new_col(self, name: str, coltype: str, constraints: str) -> bool:
         ''' Adding new field into the main table '''
+        # TODO убрать везде raw SQL
         try:
             self.session.execute(text(f'ALTER TABLE "{TABLENAME}" ADD COLUMN {name} {coltype} {constraints} DEFAULT NULL'))  # TODO потом заменить на alembic
             self.session.commit()
@@ -198,14 +200,22 @@ class MyPostgresConnection:
             self.session.rollback()
             return False, error_code
 
-    def find(self, colname: str, value: Union[str, int]):
+    def find(self, colname: str, value: Union[str, int]) -> tuple[bool, list[AllHouseholdItems] | None, str | None]:
         ''' Searching for the desired item in the main table '''
 
-        query = f"SELECT * FROM {TABLENAME} WHERE {colname} = '{value}'"
-        self.cur.execute(query)
-        rows = self.cur.fetchall()
+        try:
+            column = getattr(AllHouseholdItems, colname)
 
-        return rows if rows else False
+            stmt = select(AllHouseholdItems).where(column == value)
+
+            rows = self.session.execute(stmt).scalars().all()
+
+            return True, rows if rows else None, None
+
+        except ProgrammingError as e:
+            error_code = getattr(e.orig, 'pgcode', None)
+            self.session.rollback()
+            return False, None, error_code
 
 
 

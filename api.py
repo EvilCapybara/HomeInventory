@@ -35,6 +35,11 @@ RENAME_COL_NEXT_STEP = {
     "new_name": None,
 }
 
+SEARCHING_NEXT_STEP = {
+    "colname": "value",
+    "value": None,
+}
+
 # --- словарь подсказок для следующих шагов в процессе add ---
 ADD_PROMPTS = {
     "name": "Введите название предмета:",
@@ -68,6 +73,11 @@ RENAME_COL_PROMPTS = {
     "new_name": "Введите новое имя для колонки:",
 }
 
+SEARCHING_PROMPTS = {
+    "colname": "Пожалуйста, введите название колонки, объект которой вы хотите найти:",
+    "value": "Пожалуйста, введите запрос для поиска объекта по базе данных",
+}
+
 SKIP_STEPS = ["brand", "model", "category", "storage_place", "belong_to", "constraints"]
 
 
@@ -97,6 +107,8 @@ class Bot(telebot.TeleBot):  # TODO добавить status чтобы сраз�
             text = HomeManager().delete_col(item_data=data)
         elif context == 'rename_col':
             text = HomeManager().rename_col(item_data=data)
+        elif context == 'find':
+            text = HomeManager().find(item_data=data)
 
         # очищаем состояние пользователя
         del self.user_states[user.id]
@@ -215,7 +227,18 @@ class Bot(telebot.TeleBot):  # TODO добавить status чтобы сраз�
             }
             self.reply_to(message, RENAME_COL_PROMPTS[self.user_states[user.id]["step"]])
 
-        @self.message_handler(func=lambda m: True)
+        @self.message_handler(commands=['find'])
+        def find(message):
+            user = message.from_user
+            self.user_states[user.id] = {
+                "step": next(iter(SEARCHING_NEXT_STEP)),
+                "data": {},
+                "action": "find",
+                "next_question_exists": True
+            }
+            self.reply_to(message, SEARCHING_PROMPTS[self.user_states[user.id]["step"]])
+
+        @self.message_handler(func=lambda message: message.from_user.id in self.user_states)
         def steps_handler(message):
             user = message.from_user
 
@@ -330,22 +353,37 @@ class Bot(telebot.TeleBot):  # TODO добавить status чтобы сраз�
                     self.sending_next_question(message=message, prompt=RENAME_COL_PROMPTS, next_step=next_step,
                                                context=action)
 
-    # def handle_input(self, user):
-    #     @self.message_handler(func=lambda message: True)
-    #     def input_handler(message):
-    #
-    #         if user.id not in self.user_states:
-    #             return
-    #
-    #         state = self.user_states[user.id]
-    #
-    #         item_name = message.text
-    #         from homemanager import HomeManager
-    #
-    #         if state["action"] == "delete":
-    #             text = HomeManager().handle_delete(name=item_name)
-    #         elif state["action"] == "remove":
-    #             text = HomeManager().remove(user=user, item_data=item_data)
-    #
-    #         del self.user_states[user.id]
-    #         self.reply_to(message, text)
+            # --- ACTION == FIND ---
+            if action == 'find':
+                if step == "colname":
+                    data["colname"] = message.text
+                elif step == 'value':
+                    data["value"] = message.text
+
+                next_step: Optional[str] = self.next_step(step=step, next_step_list=SEARCHING_NEXT_STEP)
+                self.user_states[user.id]['step'] = next_step
+                self.user_states[user.id]["next_question_exists"] = True if next_step else False
+
+                if not next_step:
+                    self.complete_answering(user=user, data=data, message=message, context=action)
+                else:
+                    self.sending_next_question(message=message, prompt=SEARCHING_PROMPTS, next_step=next_step,
+                                               context=action)
+
+        # @self.callback_query_handler(func=lambda c: c.data == "skip")
+        # def handle_skip(callback):
+        #
+        #     user = callback.from_user
+        #
+        #     if user.id not in self.user_states:
+        #         self.answer_callback_query(callback_query_id=callback.id)
+        #         return
+        #
+        #     state: dict = self.user_states[user.id]
+        #     step: str = state["step"]
+        #     state["data"][step] = None  # т.к. пользователь нажал пропустить
+        #
+        #     # переход к следующему шагу
+        #     self.handle_add_steps(callback.message)
+        #
+        #     self.answer_callback_query(callback.id)

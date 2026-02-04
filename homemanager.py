@@ -195,14 +195,34 @@ class HomeManager:
 
         return text
 
-    def find(self, colname, value):
-        colname = colname.replace(' ', '_')
-        target_rows = self.conn.find(colname, value)
-        if target_rows:
-            for row in target_rows:
-                print(row)
-        else:
-            print(f'Item with {colname} {value} not found')
+    def find(self, item_data: dict):
 
+        colname: str = item_data["colname"]
+        value: str = item_data["value"]
+
+        colname = '_'.join(colname.strip().lower().split())
+        # value = ' '.join(value.strip().lower().split())
+
+        success, rows, error_code = self.conn.find(colname, value)
+
+        if not success:
+
+            if error_code == '42703':  # undefined column
+                return f'No column with name "{colname}" found'
+            elif error_code == '42P01':  # undefined table
+                return 'Table does not exist'
+            else:
+                return f'Database error ({error_code})'
+
+        if not rows:
+            return f'Item with {colname} "{value}" not found'
+
+        text_lines = []
+
+        for row in rows:
+            line = f"- {row.name} | {row.quantity or '-'} | хранение: {row.storage_place}"
+            text_lines.append(line)
+
+        return "\n".join(text_lines)
 
 
