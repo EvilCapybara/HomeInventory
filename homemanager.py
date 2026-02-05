@@ -83,10 +83,10 @@ class HomeManager:
             text = "\n".join(text_lines)
         return text
 
-    def add_new_item(self, user, item_data: dict):
+    def add_new_item(self, user_id: int, item_data: dict):
 
         # returning name and quantity values
-        result, how_many_already_existed = self.conn.add_new_item(user, item_data)
+        result, how_many_already_existed = self.conn.add_new_item(user_id, item_data)
 
         if result is True:
             text = f"Item {item_data['name']} added successfully."
@@ -195,7 +195,7 @@ class HomeManager:
 
         return text
 
-    def find(self, item_data: dict):
+    def find(self, item_data: dict):  # TODO разделить на find_by_category, find_by_name итд
 
         colname: str = item_data["colname"]
         value: str = item_data["value"]

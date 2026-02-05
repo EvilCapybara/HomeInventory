@@ -92,10 +92,10 @@ class MyPostgresConnection:
             Task.launch_task(name='export_inventory_table', description='Exporting inventory table')
             self.session.commit()
 
-    def add_new_item(self, user: telebot.User, item_data: dict):  # TODO вопрос добавление существующего это расчет или ошибка
+    def add_new_item(self, user_id: int, item_data: dict):  # TODO вопрос добавление существующего это расчет или ошибка
         ''' Adding new record to the main table. '''
 
-        db_user = (self.session.query(Users).filter(Users.telegram_id == user.id).one())
+        db_user = (self.session.query(Users).filter(Users.telegram_id == user_id).one())
 
         new_item = AllHouseholdItems(name=item_data['name'], brand=item_data['brand'], model=item_data['model'],
                                      category=item_data['category'], quantity=item_data['quantity'],

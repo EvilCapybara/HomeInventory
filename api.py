@@ -2,6 +2,7 @@ import config
 import telebot
 from typing import Optional
 from gui import Keyboard
+from database import MyPostgresConnection
 
 # from homemanager import HomeManager
 
@@ -88,13 +89,19 @@ class Bot(telebot.TeleBot):  # TODO добавить status чтобы сраз�
         self.user_states = dict()
         self.action_not_started_yet = dict()
 
-    def complete_answering(self, user: telebot.types.User, context: str, data: dict, message: telebot.types.Message):
+    def _reply(self, user_id: int, text: str, message=None):
+        if message:
+            self.reply_to(message, text)
+        else:
+            self.send_message(user_id, text)
+
+    def complete_answering(self, user_id: int, context: str, data: dict, message=None):
         ''' если шагов больше нет, сохраняем в БД '''
         # if self.user_states[user.id].get("next_question_exists") is False or None:
         from homemanager import HomeManager
 
         if context == 'add':
-            text = HomeManager().add_new_item(user=user, item_data=data)
+            text = HomeManager().add_new_item(user_id=user_id, item_data=data)
         elif context == 'delete':
             text = HomeManager().delete(item_data=data)
         elif context == 'remove':
@@ -111,10 +118,10 @@ class Bot(telebot.TeleBot):  # TODO добавить status чтобы сраз�
             text = HomeManager().find(item_data=data)
 
         # очищаем состояние пользователя
-        del self.user_states[user.id]
+        del self.user_states[user_id]
 
         # отправляем финальное сообщение
-        self.reply_to(message, text)
+        self._reply(user_id, text, message)
         return
 
     def next_step(self, step: str, next_step_list: dict) -> Optional[str]:
@@ -133,6 +140,144 @@ class Bot(telebot.TeleBot):  # TODO добавить status чтобы сраз�
                 self.reply_to(message=message, text=prompt)
         else:
             self.reply_to(message=message, text=prompt)
+
+    def _process_step(self, user_id: int, text: str | None = None, step_override=None, value_override=None, message=None):
+
+        if user_id not in self.user_states:
+            return  # пользователь не в режиме добавления
+
+        state: dict = self.user_states[user_id]
+        step = step_override or state.get("step")
+        data = state.get("data")
+        action = state.get("action")
+
+        value = value_override if value_override is not None else text
+        data[step] = value
+
+        # --- ACTION == ADD ---
+        if action == 'add':
+            # --- сохраняем текст пользователя в data ---
+            if step == "name":
+                data["name"] = value
+            elif step == "brand":
+                data["brand"] = value
+            elif step == "model":
+                data["model"] = value
+            elif step == "category":
+                data["category"] = value
+            elif step == "quantity":
+                if value_override is None:
+                    if not value or not value.isdigit():
+                        self._reply(user_id, "Пожалуйста, введите число.", message)
+                        return
+
+                    data["quantity"] = int(value)
+                else:
+                    self._reply(user_id, "Количество нельзя пропустить.", message)
+                    return
+            elif step == "storage_place":
+                data["storage_place"] = value
+            elif step == "belong_to":
+                data["belong_to"] = value
+
+            # --- определяем следующий шаг ---
+            next_step = self.next_step(step=step, next_step_list=ADD_NEXT_STEP)
+            self.user_states[user_id]['step'] = next_step
+            self.user_states[user_id]["next_question_exists"] = True if next_step else False
+
+            if not next_step:
+                # --- если шагов больше нет, сохраняем в БД ---
+                self.complete_answering(user_id=user_id, data=data, context=action, message=message)
+            else:
+                # --- отправляем следующий вопрос ---
+                self.sending_next_question(message=message, prompt=ADD_PROMPTS, next_step=next_step, context=action)
+
+        # --- ACTION == REMOVE or ADD MORE ---
+        if action == 'remove' or action == 'add_more':
+            # --- сохраняем текст пользователя в data ---
+            if step == "name":
+                data["name"] = message.text
+            elif step == 'quantity':
+                if not message.text.isdigit():
+                    self.reply_to(message, "Пожалуйста, введите число.")
+                    return
+                data["quantity"] = int(message.text)
+
+            next_step: Optional[str] = self.next_step(step=step, next_step_list=EDIT_QUANTITY_NEXT_STEP)
+            self.user_states[user.id]['step'] = next_step
+            self.user_states[user.id]["next_question_exists"] = True if next_step else False
+
+            if not next_step:
+                self.complete_answering(user=user, data=data, message=message, context=action)
+            elif action == 'remove':
+                self.sending_next_question(message=message, prompt=REMOVE_PROMPTS, next_step=next_step,
+                                           context=action)
+            else:
+                self.sending_next_question(message=message, prompt=ADD_MORE_PROMPTS, next_step=next_step,
+                                           context=action)
+
+        # --- ACTION == DELETE ---
+        if action == 'delete':
+            data["name"] = message.text
+            self.complete_answering(user=user, data=data, message=message, context=action)
+
+        # --- ACTION == ADD NEWCOL ---
+        if action == 'add_newcol':
+            if step == "name":
+                data["name"] = message.text
+            elif step == 'type':
+                data["type"] = message.text
+            elif step == 'constraints':
+                data["constraints"] = message.text
+
+            next_step: Optional[str] = self.next_step(step=step, next_step_list=NEWCOL_NEXT_STEP)
+            self.user_states[user.id]['step'] = next_step
+            self.user_states[user.id]["next_question_exists"] = True if next_step else False
+
+            if not next_step:
+                self.complete_answering(user=user, data=data, message=message, context=action)
+            else:
+                self.sending_next_question(message=message, prompt=NEWCOL_PROMPTS, next_step=next_step,
+                                           context=action)
+
+        # --- ACTION == DELETE COL ---
+        if action == 'delete_col':
+            data["name"] = message.text
+            self.complete_answering(user=user, data=data, message=message, context=action)
+
+        # --- ACTION == RENAME COL ---
+        if action == 'rename_col':
+            if step == "old_name":
+                data["old_name"] = message.text
+            elif step == 'new_name':
+                data["new_name"] = message.text
+
+            next_step: Optional[str] = self.next_step(step=step, next_step_list=RENAME_COL_NEXT_STEP)
+            self.user_states[user.id]['step'] = next_step
+            self.user_states[user.id]["next_question_exists"] = True if next_step else False
+
+            if not next_step:
+                self.complete_answering(user=user, data=data, message=message, context=action)
+            else:
+                self.sending_next_question(message=message, prompt=RENAME_COL_PROMPTS, next_step=next_step,
+                                           context=action)
+
+        # --- ACTION == FIND ---
+        if action == 'find':
+            if step == "colname":
+                data["colname"] = message.text
+            elif step == 'value':
+                data["value"] = message.text
+
+            next_step: Optional[str] = self.next_step(step=step, next_step_list=SEARCHING_NEXT_STEP)
+            self.user_states[user.id]['step'] = next_step
+            self.user_states[user.id]["next_question_exists"] = True if next_step else False
+
+            if not next_step:
+                self.complete_answering(user=user, data=data, message=message, context=action)
+            else:
+                self.sending_next_question(message=message, prompt=SEARCHING_PROMPTS, next_step=next_step,
+                                           context=action)
 
     def register_handlers(self):
         @self.message_handler(commands=['start'])  # хэндлер команды старт
@@ -240,150 +385,151 @@ class Bot(telebot.TeleBot):  # TODO добавить status чтобы сраз�
 
         @self.message_handler(func=lambda message: message.from_user.id in self.user_states)
         def steps_handler(message):
-            user = message.from_user
-
-            if user.id not in self.user_states:
-                return  # пользователь не в режиме добавления
-
-            state: dict = self.user_states[user.id]
-            action: str = state["action"]
-            step: str = state.get("step")
-            data: dict = state["data"]
-
-            # --- ACTION == ADD ---
-            if action == 'add':
-                # --- сохраняем текст пользователя в data ---
-                if step == "name":
-                    data["name"] = message.text
-                elif step == "brand":
-                    data["brand"] = message.text
-                elif step == "model":
-                    data["model"] = message.text
-                elif step == "category":
-                    data["category"] = message.text
-                elif step == "quantity":
-                    if not message.text.isdigit():
-                        self.reply_to(message, "Пожалуйста, введите число.")
-                        return
-                    data["quantity"] = int(message.text)
-                elif step == "storage_place":
-                    data["storage_place"] = message.text
-                elif step == "belong_to":
-                    data["belong_to"] = message.text
-
-                # --- определяем следующий шаг ---
-                next_step = self.next_step(step=step, next_step_list=ADD_NEXT_STEP)
-                self.user_states[user.id]['step'] = next_step
-                self.user_states[user.id]["next_question_exists"] = True if next_step else False
-
-                if not next_step:
-                    # --- если шагов больше нет, сохраняем в БД ---
-                    self.complete_answering(user=user, data=data, message=message, context=action)
-                else:
-                    # --- отправляем следующий вопрос ---
-                    self.sending_next_question(message=message, prompt=ADD_PROMPTS, next_step=next_step, context=action)
-
-            # --- ACTION == REMOVE or ADD MORE ---
-            if action == 'remove' or action == 'add_more':
-                # --- сохраняем текст пользователя в data ---
-                if step == "name":
-                    data["name"] = message.text
-                elif step == 'quantity':
-                    if not message.text.isdigit():
-                        self.reply_to(message, "Пожалуйста, введите число.")
-                        return
-                    data["quantity"] = int(message.text)
-
-                next_step: Optional[str] = self.next_step(step=step, next_step_list=EDIT_QUANTITY_NEXT_STEP)
-                self.user_states[user.id]['step'] = next_step
-                self.user_states[user.id]["next_question_exists"] = True if next_step else False
-
-                if not next_step:
-                    self.complete_answering(user=user, data=data, message=message, context=action)
-                elif action == 'remove':
-                    self.sending_next_question(message=message, prompt=REMOVE_PROMPTS, next_step=next_step,
-                                               context=action)
-                else:
-                    self.sending_next_question(message=message, prompt=ADD_MORE_PROMPTS, next_step=next_step,
-                                               context=action)
-
-            # --- ACTION == DELETE ---
-            if action == 'delete':
-                data["name"] = message.text
-                self.complete_answering(user=user, data=data, message=message, context=action)
-
-            # --- ACTION == ADD NEWCOL ---
-            if action == 'add_newcol':
-                if step == "name":
-                    data["name"] = message.text
-                elif step == 'type':
-                    data["type"] = message.text
-                elif step == 'constraints':
-                    data["constraints"] = message.text
-
-                next_step: Optional[str] = self.next_step(step=step, next_step_list=NEWCOL_NEXT_STEP)
-                self.user_states[user.id]['step'] = next_step
-                self.user_states[user.id]["next_question_exists"] = True if next_step else False
-
-                if not next_step:
-                    self.complete_answering(user=user, data=data, message=message, context=action)
-                else:
-                    self.sending_next_question(message=message, prompt=NEWCOL_PROMPTS, next_step=next_step,
-                                               context=action)
-
-            # --- ACTION == DELETE COL ---
-            if action == 'delete_col':
-                data["name"] = message.text
-                self.complete_answering(user=user, data=data, message=message, context=action)
-
-            # --- ACTION == RENAME COL ---
-            if action == 'rename_col':
-                if step == "old_name":
-                    data["old_name"] = message.text
-                elif step == 'new_name':
-                    data["new_name"] = message.text
-
-                next_step: Optional[str] = self.next_step(step=step, next_step_list=RENAME_COL_NEXT_STEP)
-                self.user_states[user.id]['step'] = next_step
-                self.user_states[user.id]["next_question_exists"] = True if next_step else False
-
-                if not next_step:
-                    self.complete_answering(user=user, data=data, message=message, context=action)
-                else:
-                    self.sending_next_question(message=message, prompt=RENAME_COL_PROMPTS, next_step=next_step,
-                                               context=action)
-
-            # --- ACTION == FIND ---
-            if action == 'find':
-                if step == "colname":
-                    data["colname"] = message.text
-                elif step == 'value':
-                    data["value"] = message.text
-
-                next_step: Optional[str] = self.next_step(step=step, next_step_list=SEARCHING_NEXT_STEP)
-                self.user_states[user.id]['step'] = next_step
-                self.user_states[user.id]["next_question_exists"] = True if next_step else False
-
-                if not next_step:
-                    self.complete_answering(user=user, data=data, message=message, context=action)
-                else:
-                    self.sending_next_question(message=message, prompt=SEARCHING_PROMPTS, next_step=next_step,
-                                               context=action)
-
-        # @self.callback_query_handler(func=lambda c: c.data == "skip")
-        # def handle_skip(callback):
-        #
-        #     user = callback.from_user
+            self._process_step(user_id=message.from_user.id, text=message.text, message=message)
+        #     user = message.from_user
         #
         #     if user.id not in self.user_states:
-        #         self.answer_callback_query(callback_query_id=callback.id)
-        #         return
+        #         return  # пользователь не в режиме добавления
         #
         #     state: dict = self.user_states[user.id]
-        #     step: str = state["step"]
-        #     state["data"][step] = None  # т.к. пользователь нажал пропустить
+        #     action: str = state["action"]
+        #     step: str = state.get("step")
+        #     data: dict = state["data"]
         #
-        #     # переход к следующему шагу
-        #     self.handle_add_steps(callback.message)
+        #     # --- ACTION == ADD ---
+        #     if action == 'add':
+        #         # --- сохраняем текст пользователя в data ---
+        #         if step == "name":
+        #             data["name"] = message.text
+        #         elif step == "brand":
+        #             data["brand"] = message.text
+        #         elif step == "model":
+        #             data["model"] = message.text
+        #         elif step == "category":
+        #             data["category"] = message.text
+        #         elif step == "quantity":
+        #             if not message.text.isdigit():
+        #                 self.reply_to(message, "Пожалуйста, введите число.")
+        #                 return
+        #             data["quantity"] = int(message.text)
+        #         elif step == "storage_place":
+        #             data["storage_place"] = message.text
+        #         elif step == "belong_to":
+        #             data["belong_to"] = message.text
         #
-        #     self.answer_callback_query(callback.id)
+        #         # --- определяем следующий шаг ---
+        #         next_step = self.next_step(step=step, next_step_list=ADD_NEXT_STEP)
+        #         self.user_states[user.id]['step'] = next_step
+        #         self.user_states[user.id]["next_question_exists"] = True if next_step else False
+        #
+        #         if not next_step:
+        #             # --- если шагов больше нет, сохраняем в БД ---
+        #             self.complete_answering(user=user, data=data, message=message, context=action)
+        #         else:
+        #             # --- отправляем следующий вопрос ---
+        #             self.sending_next_question(message=message, prompt=ADD_PROMPTS, next_step=next_step, context=action)
+        #
+        #     # --- ACTION == REMOVE or ADD MORE ---
+        #     if action == 'remove' or action == 'add_more':
+        #         # --- сохраняем текст пользователя в data ---
+        #         if step == "name":
+        #             data["name"] = message.text
+        #         elif step == 'quantity':
+        #             if not message.text.isdigit():
+        #                 self.reply_to(message, "Пожалуйста, введите число.")
+        #                 return
+        #             data["quantity"] = int(message.text)
+        #
+        #         next_step: Optional[str] = self.next_step(step=step, next_step_list=EDIT_QUANTITY_NEXT_STEP)
+        #         self.user_states[user.id]['step'] = next_step
+        #         self.user_states[user.id]["next_question_exists"] = True if next_step else False
+        #
+        #         if not next_step:
+        #             self.complete_answering(user=user, data=data, message=message, context=action)
+        #         elif action == 'remove':
+        #             self.sending_next_question(message=message, prompt=REMOVE_PROMPTS, next_step=next_step,
+        #                                        context=action)
+        #         else:
+        #             self.sending_next_question(message=message, prompt=ADD_MORE_PROMPTS, next_step=next_step,
+        #                                        context=action)
+        #
+        #     # --- ACTION == DELETE ---
+        #     if action == 'delete':
+        #         data["name"] = message.text
+        #         self.complete_answering(user=user, data=data, message=message, context=action)
+        #
+        #     # --- ACTION == ADD NEWCOL ---
+        #     if action == 'add_newcol':
+        #         if step == "name":
+        #             data["name"] = message.text
+        #         elif step == 'type':
+        #             data["type"] = message.text
+        #         elif step == 'constraints':
+        #             data["constraints"] = message.text
+        #
+        #         next_step: Optional[str] = self.next_step(step=step, next_step_list=NEWCOL_NEXT_STEP)
+        #         self.user_states[user.id]['step'] = next_step
+        #         self.user_states[user.id]["next_question_exists"] = True if next_step else False
+        #
+        #         if not next_step:
+        #             self.complete_answering(user=user, data=data, message=message, context=action)
+        #         else:
+        #             self.sending_next_question(message=message, prompt=NEWCOL_PROMPTS, next_step=next_step,
+        #                                        context=action)
+        #
+        #     # --- ACTION == DELETE COL ---
+        #     if action == 'delete_col':
+        #         data["name"] = message.text
+        #         self.complete_answering(user=user, data=data, message=message, context=action)
+        #
+        #     # --- ACTION == RENAME COL ---
+        #     if action == 'rename_col':
+        #         if step == "old_name":
+        #             data["old_name"] = message.text
+        #         elif step == 'new_name':
+        #             data["new_name"] = message.text
+        #
+        #         next_step: Optional[str] = self.next_step(step=step, next_step_list=RENAME_COL_NEXT_STEP)
+        #         self.user_states[user.id]['step'] = next_step
+        #         self.user_states[user.id]["next_question_exists"] = True if next_step else False
+        #
+        #         if not next_step:
+        #             self.complete_answering(user=user, data=data, message=message, context=action)
+        #         else:
+        #             self.sending_next_question(message=message, prompt=RENAME_COL_PROMPTS, next_step=next_step,
+        #                                        context=action)
+        #
+        #     # --- ACTION == FIND ---
+        #     if action == 'find':
+        #         if step == "colname":
+        #             data["colname"] = message.text
+        #         elif step == 'value':
+        #             data["value"] = message.text
+        #
+        #         next_step: Optional[str] = self.next_step(step=step, next_step_list=SEARCHING_NEXT_STEP)
+        #         self.user_states[user.id]['step'] = next_step
+        #         self.user_states[user.id]["next_question_exists"] = True if next_step else False
+        #
+        #         if not next_step:
+        #             self.complete_answering(user=user, data=data, message=message, context=action)
+        #         else:
+        #             self.sending_next_question(message=message, prompt=SEARCHING_PROMPTS, next_step=next_step,
+        #                                        context=action)
+
+        @self.callback_query_handler(func=lambda c: c.data == "skip")
+        def handle_skip(callback):
+
+            user_bot = callback.from_user
+
+            if user_bot.id not in self.user_states:
+                self.answer_callback_query(callback_query_id=callback.id)
+                return
+
+            state: dict = self.user_states[user_bot.id]
+            step: str = state["step"]
+            state["data"][step] = None  # т.к. пользователь нажал пропустить
+
+            # переход к следующему шагу
+            self._process_step(user_id=callback.from_user.id, step_override=step, value_override=None, message=callback.message)
+
+            self.answer_callback_query(callback.id)
