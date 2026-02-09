@@ -1,5 +1,4 @@
 ''' Управление основными CRUD-операциями (create-read-update-delete) '''
-# В ПОСЛЕДНЕЙ ГЛАВЕ ХАБРОВСКОГО УЧЕБННИКА ПОКАЗАНО КАК ДОБАВИТЬ БАЗОВЫЕ ОПЦИИ ДЛЯ API (РЕГИСТРАЦИЯ НОВОГО ЮЗЕРА, ВЫВОД В ФОРМАТЕ СЛОВАРЯ)
 
 import psycopg2 as pg_driver
 import sqlalchemy
@@ -16,6 +15,18 @@ import telebot.types as telebot
 import elastic
 
 TABLENAME = AllHouseholdItems.__tablename__
+
+
+def build_constraints_sql(meta: dict) -> str:
+    parts = []
+
+    if meta.get("required"):
+        parts.append("NOT NULL")
+
+    if meta.get("unique"):
+        parts.append("UNIQUE")
+
+    return " ".join(parts)
 
 
 class MyPostgresConnection:
@@ -55,6 +66,17 @@ class MyPostgresConnection:
                 return False, "FOREIGN KEY"
 
         return True, None
+
+    def list_cols(self) -> list[str]:
+        q = text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'  
+              AND table_name = :table_name
+            ORDER BY ordinal_position
+        """)
+        res = self.session.execute(q, {"table_name": TABLENAME})
+        return [r[0] for r in res.fetchall()]
 
     def show_database(self, belonging_to: int):  #TODO добавить проверку на existing юзера, чтоб каждый раз не прописывать первый блок
         ''' Just showing main table containing all household items. '''
@@ -153,11 +175,12 @@ class MyPostgresConnection:
 
         return quantity.scalar()
 
-    def add_new_col(self, name: str, coltype: str, constraints: str) -> bool:
+    def add_new_col(self, name: str, coltype: str, constraints: dict) -> bool:
         ''' Adding new field into the main table '''
         # TODO убрать везде raw SQL
+        constraints_sql = build_constraints_sql(constraints)
         try:
-            self.session.execute(text(f'ALTER TABLE "{TABLENAME}" ADD COLUMN {name} {coltype} {constraints} DEFAULT NULL'))  # TODO потом заменить на alembic
+            self.session.execute(text(f'ALTER TABLE "{TABLENAME}" ADD COLUMN "{name}" {coltype} {constraints_sql} DEFAULT NULL'))  # TODO потом заменить на alembic
             self.session.commit()
             return True
         except ProgrammingError as e:
@@ -176,7 +199,7 @@ class MyPostgresConnection:
             if not result:
                 return result, reason
             else:
-                self.session.execute(text(f'ALTER TABLE "{TABLENAME}" DROP COLUMN {name}'))
+                self.session.execute(text(f'ALTER TABLE "{TABLENAME}" DROP COLUMN "{name}"'))
                 self.session.commit()
                 return True, None
         except ProgrammingError as e:

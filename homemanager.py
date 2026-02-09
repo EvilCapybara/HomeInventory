@@ -8,13 +8,15 @@ from typing import Optional, Union
 # from models import SearchableMixin
 
 
-type_mapping = {'str': 'text',
+type_mapping = {'text': 'text',
                 'int': 'integer',
                 'float': 'float',
                 'bool': 'boolean',
                 'datetime.date': 'date',
                 'none': 'null'
                 }
+
+PROTECTED_COLS = {"id", "name", "brand", "model", "category", "quantity", "storage_place", "belong_to", "timestamp", "owner_id"}
 
 
 def singleton(cls):
@@ -53,6 +55,11 @@ class HomeManager:
     #         print(f"User with this username already exists.")
     #         return False
 
+    def list_custom_cols(self) -> list[str]:
+        cols = self.conn.list_cols()
+        # убираем защищенные + возможно служебные
+        return [c for c in cols if c not in PROTECTED_COLS]
+
     def handle_start(self, user: telebot.types.User):
         if self.conn.add_new_user(user.id, user.username, user.first_name):
             text = f"""Привет, *{user.first_name}*!\n"
@@ -66,16 +73,14 @@ class HomeManager:
         text = 'Вы уже зарегистрированы!'
         return text
 
-    def handle_view(self, user: telebot.types.User):
-        # self.conn.show_database()
-        status, items = self.conn.show_database(belonging_to=user.id)  # убрать прокидывание юзера через вызовы, пусть каждый раз вычисляется в database
+    def view(self, user_id: int):
+        status, items = self.conn.show_database(belonging_to=user_id)  # убрать прокидывание юзера через вызовы, пусть каждый раз вычисляется в database
+
         if status == 'no_user':
             text = 'Вы ещё не зарегистрированы'
         elif status == 'no_items':
             text = 'У вас пока нет сохранённых предметов.'
-        else:
-            return
-        if items:
+        elif items:
             text_lines = []
             for item in items:
                 line = f"- {item.name} | {item.quantity or '-'} | хранение: {item.storage_place}"
@@ -140,9 +145,9 @@ class HomeManager:
         return text
 
     def add_newcol(self, item_data: dict) -> str:
-        name: str = item_data["name"]
-        coltype: str = item_data["type"]
-        constraints: Optional[str] = item_data["constraints"]
+        name: str = item_data["field"]["label"]
+        coltype: str = item_data["field"]["type"]
+        constraints: dict = item_data["field"]["constraints"]
 
         name = '_'.join(name.strip().lower().split())
 
@@ -150,8 +155,8 @@ class HomeManager:
 
         # if constraints == 'unique':
         #     raise ValueError("You cannot use UNIQUE constraint for new added column due to default value reasons.")
-        if constraints == '-' or constraints is None:
-            constraints = ''
+        # if constraints == '-' or constraints is None:
+        #     constraints = ''
 
         if self.conn.add_new_col(name, coltype, constraints):
             text = f'Successfully added new {name} field'

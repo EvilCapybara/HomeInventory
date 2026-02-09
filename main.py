@@ -16,13 +16,6 @@ def main():
     home_manager = HomeManager()
     # cli.delete()
     # home_manager.welcome_view()
-    test_user = TestUser()
-
-
-class TestUser:
-    telegram_id = '1234'
-    username = 'capy'
-    first_name = 'dasha'
 
 
 if __name__ == '__main__':
