@@ -46,7 +46,9 @@ jobs:
             If needed, you can run database queries using the configured PostgreSQL CLI.
             The main data model includes items, categories, and locations.
             When working with data, prefer reusing existing query functions in database.py instead of creating duplicate SQL logic.
-            If needed, use the mcp__db tools to work with data and database.
+            If needed, you can query the db with the 'psql' cli or using the mcp__db set of tools.
+            If needed, you can check the correctness of Redis processes, use the 'redis-cli' cli.
+            To launch project inside of Docker ecosystem, use the 'docker' cli.
             The system focuses on avoiding duplicate inventory records and maintaining consistent item organization.
 
           mcp_config: |
@@ -70,10 +72,13 @@ jobs:
             Bash(pytest:*),
             Bash(python:*),
             Bash(git:*),
+            Bash(psql:*),
+            Bash(docker:*),
+            Bash(redis-cli:*),
             mcp__db__list_databases,
             mcp__db__list_schemas,
             mcp__db__list_tables,
-            mcp__dd__execute_query
+            mcp__db__execute_query
             
 
           # This is an optional setting that allows Claude to read CI results on PRs
