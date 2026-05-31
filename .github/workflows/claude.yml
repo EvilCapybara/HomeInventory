@@ -30,11 +30,42 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Project Setup
+        run: |
+          python utils/setup.py
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          custom_instructions: |
+            The project is a Home Inventory system for tracking household items, categories and storage locations.
+            The backend is already set up with all dependencies installed.
+            If needed, you can run database queries using the configured PostgreSQL CLI.
+            The main data model includes items, categories, and locations.
+            When working with data, prefer reusing existing query functions in database.py instead of creating duplicate SQL logic.
+            If needed, use the mcp__db tools to work with data and database.
+            The system focuses on avoiding duplicate inventory records and maintaining consistent item organization.
+
+          mcp_config: |
+            {
+              "mcpServers": {
+                "db": {
+                  "type": "stdio",
+                  "command": "npx",
+                  "args": [
+                    "-y",
+                    "@bytebase/dbhub",
+                    "--dsn",
+                    "postgresql://postgres:1@localhost:5432/HomeInventory"
+                  ],
+                  "env": {}
+                }
+              }
+            }
+            
 
           # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
