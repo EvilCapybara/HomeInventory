@@ -65,6 +65,15 @@ jobs:
                 }
               }
             }
+
+          allowed_tools: |
+            Bash(pytest:*),
+            Bash(python:*),
+            Bash(git:*),
+            mcp__db__list_databases,
+            mcp__db__list_schemas,
+            mcp__db__list_tables,
+            mcp__dd__execute_query
             
 
           # This is an optional setting that allows Claude to read CI results on PRs
