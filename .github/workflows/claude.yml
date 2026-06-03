@@ -1,0 +1,95 @@
+name: Claude Code
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  claude:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+      actions: read # Required for Claude to read CI results on PRs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Project Setup
+        run: |
+          python utils/setup.py
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          custom_instructions: |
+            The project is a Home Inventory system for tracking household items, categories and storage locations.
+            The backend is already set up with all dependencies installed.
+            If needed, you can run database queries using the configured PostgreSQL CLI.
+            The main data model includes items, categories, and locations.
+            When working with data, prefer reusing existing query functions in database.py instead of creating duplicate SQL logic.
+            If needed, you can query the db with the 'psql' cli or using the mcp__db set of tools.
+            If needed, you can check the correctness of Redis processes, use the 'redis-cli' cli.
+            To launch project inside of Docker ecosystem, use the 'docker' cli.
+            The system focuses on avoiding duplicate inventory records and maintaining consistent item organization.
+
+          mcp_config: |
+            {
+              "mcpServers": {
+                "db": {
+                  "type": "stdio",
+                  "command": "npx",
+                  "args": [
+                    "-y",
+                    "@bytebase/dbhub",
+                    "--dsn",
+                    "postgresql://postgres:1@localhost:5432/HomeInventory"
+                  ],
+                  "env": {}
+                }
+              }
+            }
+
+          allowed_tools: |
+            Bash(pytest:*),
+            Bash(python:*),
+            Bash(git:*),
+            Bash(psql:*),
+            Bash(docker:*),
+            Bash(redis-cli:*),
+            mcp__db__list_databases,
+            mcp__db__list_schemas,
+            mcp__db__list_tables,
+            mcp__db__execute_query
+            
+
+          # This is an optional setting that allows Claude to read CI results on PRs
+          additional_permissions: |
+            actions: read
+
+          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
+          # prompt: 'Update the pull request description to include a summary of changes.'
+
+          # Optional: Add claude_args to customize behavior and configuration
+          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          # or https://code.claude.com/docs/en/cli-reference for available options
+          # claude_args: '--allowed-tools Bash(gh pr *)'
+
