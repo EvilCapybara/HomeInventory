@@ -1,0 +1,23 @@
+{
+  "session_id": "d46e4cfa-2b21-4ab6-8f9d-a8d48e574a5e",
+  "transcript_path": "C:\\Users\\dasha\\.claude\\projects\\C--Users-dasha-OneDrive-----------PycharmProjects-HomeInventory\\d46e4cfa-2b21-4ab6-8f9d-a8d48e574a5e.jsonl",
+  "cwd": "C:\\Users\\dasha\\OneDrive\\Документы\\PycharmProjects\\HomeInventory",
+  "permission_mode": "default",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "PowerShell",
+  "tool_input": {
+    "command": "cd \"C:\\Users\\dasha\\OneDrive\\Документы\\PycharmProjects\\HomeInventory\"\ngit checkout main\ngit pull",
+    "description": "Switch to main and pull latest changes"
+  },
+  "tool_response": {
+    "stdout": "Your branch is up to date with 'origin/main'.\nAlready on 'main'\nFrom https://github.com/EvilCapybara/HomeInventory\n * [new branch]      add-claude-github-actions-1780256820087 -> origin/add-claude-github-actions-1780256820087\nAlready up to date.",
+    "stderr": "",
+    "interrupted": false,
+    "isImage": false
+  },
+  "tool_use_id": "toolu_018BVTUjCYVcHb8AtNFUMWtJ",
+  "duration_ms": 1131
+}

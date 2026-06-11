@@ -1,7 +1,5 @@
 .env
-cli.py
 tasks.py
-elastic.py
 notifications.py
 
 /generated/prisma

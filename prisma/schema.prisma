@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model AllHouseholdItems {
+  name          String   @unique(map: "ix_AllHouseholdItems_name") @db.VarChar(64)
+  brand         String?  @db.VarChar(64)
+  model         String?  @db.VarChar(64)
+  category      String?  @db.VarChar(64)
+  quantity      Int      @db.SmallInt
+  storage_place String
+  belong_to     String?  @db.VarChar(64)
+  timestamp     DateTime @db.Timestamp(6)
+  owner_id      Int
+  id            Int      @id @default(autoincrement())
+  color         String?
+  Users         Users    @relation(fields: [owner_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([brand], map: "ix_AllHouseholdItems_brand")
+  @@index([model], map: "ix_AllHouseholdItems_model")
+  @@index([storage_place], map: "ix_AllHouseholdItems_storage_place")
+  @@index([timestamp], map: "ix_AllHouseholdItems_timestamp")
+}
+
+model Users {
+  user_id           Int                 @id @default(autoincrement())
+  telegram_id       Int                 @unique
+  username          String?             @unique @db.VarChar(64)
+  first_name        String              @db.VarChar(64)
+  AllHouseholdItems AllHouseholdItems[]
+}
+
+model tasks {
+  job_id      String  @id @db.VarChar(36)
+  name        String  @db.VarChar(64)
+  description String? @db.VarChar(64)
+  complete    Boolean
+
+  @@index([name], map: "ix_tasks_name")
+}

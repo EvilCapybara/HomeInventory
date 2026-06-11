@@ -1,0 +1,96 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "black {{tool_input.file_path}}"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if (Test-Path test_{{tool_input.file_path}}.py) { python test_{{tool_input.file_path}}.py }"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq . > input-log.json"
+          }
+        ]
+      }      
+    ],
+
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": ["$PWD\\.claude\\hooks\\block-dangerous-commands.py"]
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Edit|MultiEdit|Write|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": ["$PWD\\.claude\\hooks\\access-control.py"]
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "Review changes in @database.py and check whether any new query logic duplicates existing database function or SQL patterns. Prefer reuse of existing handling functions instead of creating new queries."
+          }
+        ]
+      }
+    ],
+
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Rewrite the user's request into:\n- clear task\n- constraints\n- expected output\n- files likely involved\nReturn concise structured task only."
+          }
+        ]
+      }
+    ]
+  },
+
+
+  "enabledPlugins": {
+    "prisma@claude-plugins-official": false
+  },
+
+
+  "permissions": {
+    "allow": ["mcp__db"],
+    "deny": [
+      "Read(**/.env)",
+      "Edit(**/.env)",
+      "Edit(**/.gitignore)",
+      "MultiEdit(**/.env)",
+      "MultiEdit(**/.gitignore)",
+      "Write(**/.env)",
+      "Write(**/.gitignore)",
+      "Grep(**/.env)"
+    ]
+  } 
+}

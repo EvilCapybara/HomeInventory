@@ -1,0 +1,14 @@
+{
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "prisma": "^7.8.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  },
+  "compilerOptions": {
+    "types": [
+      "node"
+    ]
+  }
+}
